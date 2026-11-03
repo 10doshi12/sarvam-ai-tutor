@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f4efe6;
+  --ink: #2b2a27;
+  --accent: #c8452f;
+  --board: #17322b;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-ink: var(--ink);
+  --color-accent: var(--accent);
+  --color-board: var(--board);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.font-board {
+  font-family: var(--font-board), system-ui, sans-serif;
+}
