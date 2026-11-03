@@ -21,6 +21,10 @@ export function wrapSource(source: string): string {
   return `<<<TEXTBOOK_START\n${source}\nTEXTBOOK_END>>>`;
 }
 
+// Repeated after the textbook, because a long book in another language can pull the reply into it.
+const LANGUAGE_RULE = (lang: string) =>
+  `Reply in ${lang}, in its native script, even though the textbook may be in another language. Translate everything you write. Keep only code and essential technical terms in English.`;
+
 const SPEECH_RULES = (lang: string) =>
   `Speech rules: every "say" is natural spoken ${lang}, written in the native script of ${lang}, in one or two short conversational sentences, like a friendly teacher talking aloud. No markdown, no bullet symbols, no LaTeX and no symbols that cannot be read aloud. Say equations in words. Never read the board text word for word.`;
 
@@ -43,7 +47,7 @@ export function planPrompts(a: {
     UNTRUSTED,
     'Reply only with JSON: {"title": string, "topics": [{"title": string, "summary": string}]}.',
   ].join("\n");
-  const user = `File names: ${a.filename}\n\n${wrapSource(a.source)}`;
+  const user = `File names: ${a.filename}\n\n${wrapSource(a.source)}\n\n${LANGUAGE_RULE(lang)}`;
   return { system, user };
 }
 
@@ -70,7 +74,7 @@ export function scriptPrompts(a: {
     UNTRUSTED,
     'Reply only with JSON: {"steps": [{"say": string, "clearBoard": boolean, "board": [{"kind": string, "text": string, "latex": string, "nodes": [{"id": string, "label": string}], "edges": [{"from": string, "to": string, "label": string}]}]}], "quiz": {"question": string, "options": [string], "correctIndex": number, "explanation": string}}. Leave out board fields you do not need.',
   ].join("\n");
-  const user = `Teach the topic "${a.topic.title}" now.\n\n${wrapSource(a.source)}`;
+  const user = `Teach the topic "${a.topic.title}" now.\n\n${wrapSource(a.source)}\n\n${LANGUAGE_RULE(lang)}`;
   return { system, user };
 }
 
@@ -95,6 +99,6 @@ export function doubtPrompts(a: {
     UNTRUSTED,
     'Reply only with JSON: {"question": string, "steps": [{"say": string, "clearBoard": boolean, "board": [{"kind": string, "text": string, "latex": string, "nodes": [{"id": string, "label": string}], "edges": [{"from": string, "to": string, "label": string}]}]}]}. Leave out board fields you do not need.',
   ].join("\n");
-  const user = `Student's question: ${a.question}\n\n${wrapSource(a.source)}`;
+  const user = `Student's question: ${a.question}\n\n${wrapSource(a.source)}\n\n${LANGUAGE_RULE(lang)}`;
   return { system, user };
 }

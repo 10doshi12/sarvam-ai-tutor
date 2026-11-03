@@ -118,15 +118,26 @@ export const LIMITS = {
   doubtTranslateChars: 2000,
   captionTranslateChars: 1000,
   maxKeyterms: 50,
+  // Malformed or wrong-language replies are asked for again, up to this many tries in all.
+  chatAttempts: 3,
+  // Leaves room for code and technical terms in English.
+  minLessonScriptShare: 0.7,
 } as const;
 
 export const TIMING = {
+  // Stops a stuck Sarvam call. Three chat tries still fit inside the two minute route limit.
+  sarvamCallMs: 35_000,
+  // Large PDFs upload slowly, but this stays under the one minute route limit.
+  docUploadMs: 55_000,
   docPollMs: 3000,
   docPollTimeoutMs: 280_000,
   lessonPollMs: 800,
+  maxConcurrentScripts: 2,
   prefetchSteps: 3,
-  // Sarvam answers parallel calls slowly, so sentences are fetched one at a time.
+  // Each clip slows down in parallel, so playback fetches the current sentence alone.
   maxConcurrentTts: 1,
+  // The batch still finishes far sooner in parallel, so preparation records several at once.
+  maxConcurrentVoicing: 6,
   // A clip counts as finished this long after its length, even if the browser never says so.
   audioEndGraceMs: 800,
   // Stays under Saaras's 30 second cap.
@@ -136,6 +147,13 @@ export const TIMING = {
   // Reading pace used when a step's audio fails to play.
   fallbackMsPerChar: 60,
   fallbackMinMs: 1500,
+} as const;
+
+export const CACHE = {
+  // Bump when prompts or voices change, so old results are not reused.
+  version: 2,
+  maxEntries: 2000,
+  openTimeoutMs: 3000,
 } as const;
 
 export const SPEECH = {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { cached } from "@/lib/client/cache";
 
 export interface CaptionOption {
   code: string;
@@ -27,16 +28,20 @@ export default function Captions({
     const key = `${target}:${text}`;
     if (cache.has(key)) return;
     let live = true;
-    fetch("/api/translate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, target }),
+    cached("caption", [target, text], async () => {
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, target }),
+      });
+      const data = res.ok ? ((await res.json()) as { text?: string }) : null;
+      if (!data?.text) throw new Error("Translation failed");
+      return data.text;
     })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { text?: string } | null) => {
-        if (!live || !d?.text) return;
-        cache.set(key, d.text);
-        setTranslated({ key, text: d.text });
+      .then((done) => {
+        if (!live) return;
+        cache.set(key, done);
+        setTranslated({ key, text: done });
       })
       .catch(() => undefined);
     return () => {

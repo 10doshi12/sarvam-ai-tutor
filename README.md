@@ -63,7 +63,8 @@ Step 3 matters because the app has no login of its own. Without it, anyone with 
 flowchart TD
     A["Student chooses PDFs,<br/>tutor, level and language"] --> B["Sarvam reads the PDFs"]
     B --> C["Text is split into short topics"]
-    C --> D["Tutor teaches a topic aloud<br/>and writes on the whiteboard"]
+    C --> W["Every topic is written and voiced ahead of time,<br/>with progress on screen"]
+    W --> D["Tutor teaches a topic aloud<br/>and writes on the whiteboard"]
     D --> E{"Student has a doubt?"}
     E -- "Yes" --> F["Tutor stops and answers<br/>from the book"]
     F --> D
@@ -78,7 +79,7 @@ flowchart TD
     classDef finish fill:#ede9fe,stroke:#6d28d9,color:#3b0764
 
     class A,G student
-    class B,C,D,F ai
+    class B,C,W,D,F ai
     class E,H choice
     class I finish
 ```
@@ -112,15 +113,16 @@ A student can click any topic to jump straight to it.
 
 ## Principles
 
-- **The lesson never freezes.** If speech fails or sound is blocked, captions carry the lesson forward.
+- **The lesson never freezes.** If speech fails or sound is blocked, captions carry the lesson forward. A call to Sarvam that gets stuck is given up on rather than waited on, and writing and answering calls are tried again.
 - **The student stays in charge.** They can interrupt, skip an explanation or switch topic at any time.
+- **Teach in the chosen language.** Replies in non-English lessons are checked for the right script, and asked for again when they drift into another one.
 - **Stay on the book.** Answers come from the uploaded text first, and the tutor says so when the book does not cover a question.
 - **The secret key stays on the server.** It never reaches the browser.
 - **The textbook is material, not instructions.** Text inside a PDF is never treated as a command.
 
 ## How it fits together
 
-The browser runs the lesson and keeps it in local storage. The server holds no data: it only passes requests to Sarvam using the secret key, which is what lets it run on Vercel.
+The browser runs the lesson, keeps it in local storage and remembers slow results on the device. The server holds no data: it only passes requests to Sarvam using the secret key, which is what lets it run on Vercel.
 
 ```mermaid
 flowchart LR
@@ -150,7 +152,8 @@ flowchart LR
 
 | Module | What it does |
 |---|---|
-| Upload and preparation | Checks the PDFs in the browser, has Sarvam read them, and joins them into one lesson. If there is too much text, each document gets a fair share. |
+| Upload and preparation | Checks the PDFs in the browser, has Sarvam read them, and joins them into one lesson. If there is too much text, each document gets a fair share. It then writes and voices the whole lesson while showing which phase it is on, so the lesson plays without pauses. |
+| Device cache | Remembers the text, plans, scripts, speech and captions already produced, so the same input never waits or spends quota twice. |
 | Lesson writer | Plans the topics and writes what the tutor says and writes for each one, matched to the level and language. |
 | Player | Runs the lesson: speech, topic switching, interruptions, quizzes and progress. |
 | Avatar | Four shaded, lightly 3D tutors to choose from, each with their own look and voice, whose mouths follow the audio. It blinks, nods, gestures, follows the pointer and changes expression with the moment. |
@@ -164,6 +167,10 @@ flowchart LR
 | Scenario | Expected outcome | Why it matters |
 |---|---|---|
 | Upload a PDF, start, interrupt with a typed doubt | The tutor answers, then repeats the interrupted sentence | This is the core promise of the product |
+| Upload a PDF | The screen shows each phase in turn: reading, planning, writing, recording | Students can see it is working and stay |
+| Upload the same PDF again | The lesson is ready with no new calls to Sarvam, and it plays | Waiting and quota are only spent once |
+| Writing a topic fails during preparation | The lesson still opens | The lesson must never freeze |
+| Ask for a Marathi lesson from a long English book | Titles, speech and quiz come back in Marathi, with only code and technical terms in English | Students must get the language they chose |
 | Reload during a lesson | The lesson is still there | There is no database to fall back on |
 | Upload several PDFs | One lesson is built from all of them | Students can combine chapters |
 | One long PDF next to a short one | The short one still reaches the tutor | A long document must not silently hide another |
@@ -179,6 +186,8 @@ The automated tests cannot use a microphone, because WebKit under Playwright has
 ## Limits
 
 - Lessons stay in one browser. Clearing the site's data deletes them.
+- Preparation runs in the open tab. Leaving stops it, though finished work is saved and uploading again picks it up.
+- Deleting a lesson keeps its cached text and speech on the device, because other lessons can share them. Clearing the site's data removes them.
 - Spoken doubts must be short. Longer recordings stop automatically.
 - Quality depends on the PDF. Poorly printed scans may be read badly.
 - Whiteboard handwriting covers Latin and Devanagari. Other scripts use the system font.

@@ -1,5 +1,7 @@
 import "server-only";
 
+export const SARVAM_TIMEOUT = 504;
+
 export class SarvamError extends Error {
   constructor(
     public status: number,

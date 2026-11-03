@@ -1,4 +1,4 @@
-import { chatJson } from "@/lib/sarvam";
+import { chatJson, SARVAM_TIMEOUT } from "@/lib/sarvam";
 import { LANGUAGES, LIMITS } from "@/lib/config";
 import type { BoardItem, DoubtAnswer, LanguageCode, Level, Quiz, Step, Topic, TopicScript } from "@/lib/types";
 
@@ -160,19 +160,32 @@ export function normalizeDoubt(raw: unknown, fallbackQuestion: string): Omit<Dou
   return { question: str(raw.question) || fallbackQuestion, steps: normalizeSteps(raw.steps, LIMITS.maxDoubtSteps) };
 }
 
-/** Calls the model, validates by hand, and retries once with the error appended. */
+/** Calls the model, validates by hand, and retries with the problem appended. */
 export async function chatValidated<T>(
   args: Omit<Parameters<typeof chatJson>[0], "user"> & { user: string },
   normalize: (raw: unknown) => T,
+  check: (value: T) => string | null = () => null,
 ): Promise<T> {
   let user = args.user;
-  for (let attempt = 0; ; attempt++) {
+  // A usable reply in the wrong language still beats failing the lesson once tries run out.
+  let usable: { value: T } | null = null;
+  for (let attempt = 1; ; attempt++) {
+    let problem: string | null;
     try {
-      return normalize(await chatJson<unknown>({ ...args, user }));
+      const value = normalize(await chatJson<unknown>({ ...args, user }));
+      const complaint = check(value);
+      if (!complaint) return value;
+      usable = { value };
+      problem = complaint;
     } catch (err) {
-      if (attempt >= 1 || (err as { status?: number }).status) throw err;
-      user = `${args.user}\n\nYour previous reply was rejected: ${(err as Error).message} Reply again with complete, valid JSON.`;
+      // A timeout says nothing about the prompt, so it is retried unchanged.
+      const status = (err as { status?: number }).status;
+      if (status && status !== SARVAM_TIMEOUT) throw err;
+      if (attempt >= LIMITS.chatAttempts && !usable) throw err;
+      problem = status ? null : (err as Error).message;
     }
+    if (attempt >= LIMITS.chatAttempts && usable) return usable.value;
+    if (problem) user = `${args.user}\n\nYour previous reply was rejected: ${problem} Reply again with complete, valid JSON.`;
   }
 }
 

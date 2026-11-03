@@ -1,7 +1,7 @@
 import "server-only";
-import { LANGUAGES, SARVAM_BASE_URL } from "@/lib/config";
+import { LANGUAGES, SARVAM_BASE_URL, TIMING } from "@/lib/config";
 import type { LanguageCode } from "@/lib/types";
-import { SarvamError } from "./errors";
+import { SarvamError, SARVAM_TIMEOUT } from "./errors";
 
 const MISSING_KEY =
   "SARVAM_API_KEY is not set. Add it to .env for local runs, or to the Vercel project settings.";
@@ -9,6 +9,12 @@ const MISSING_KEY =
 export function hasApiKey(): boolean {
   return Boolean(process.env.SARVAM_API_KEY);
 }
+
+const isTimeout = (e: unknown) => ["TimeoutError", "AbortError"].includes((e as { name?: string }).name ?? "");
+const tooSlow = () => new SarvamError(SARVAM_TIMEOUT, "Sarvam took too long to answer. Please try again.");
+
+// Gives a timeout the clear message and status every route returns.
+export const namedTimeout = (e: unknown) => (isTimeout(e) ? tooSlow() : e);
 
 // Error bodies come as {error:{message}}, {detail} or {message} depending on the API.
 function errorText(body: unknown, fallback: string): string {
@@ -27,10 +33,12 @@ export async function sarvamFetch(path: string, init: RequestInit = {}): Promise
   let res: Response;
   try {
     res = await fetch(`${SARVAM_BASE_URL}${path}`, {
+      signal: AbortSignal.timeout(TIMING.sarvamCallMs),
       ...init,
       headers: { ...(init.headers as Record<string, string>), "api-subscription-key": key },
     });
-  } catch {
+  } catch (e) {
+    if (isTimeout(e)) throw tooSlow();
     throw new SarvamError(502, "Could not reach Sarvam. Check the network and try again.");
   }
   if (!res.ok) {
@@ -41,7 +49,12 @@ export async function sarvamFetch(path: string, init: RequestInit = {}): Promise
 }
 
 export async function sarvamJson<T>(path: string, init: RequestInit = {}): Promise<T> {
-  return (await sarvamFetch(path, init)).json() as Promise<T>;
+  // The time limit also covers reading the body, which can stall after the headers arrive.
+  try {
+    return (await (await sarvamFetch(path, init)).json()) as T;
+  } catch (e) {
+    throw namedTimeout(e);
+  }
 }
 
 export function postJson<T>(path: string, body: unknown): Promise<T> {

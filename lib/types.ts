@@ -15,7 +15,7 @@ export type Level = "school" | "college" | "expert";
 
 export type TutorId = "arjun" | "rohan" | "meera" | "anaya";
 
-export type LessonStatus = "reading" | "planning" | "ready" | "failed";
+export type LessonStatus = "reading" | "planning" | "writing" | "voicing" | "ready" | "failed";
 
 export interface Topic {
   id: string;
@@ -34,6 +34,8 @@ export interface Lesson {
   // Missing on lessons made before tutors could be chosen.
   tutor?: TutorId;
   status: LessonStatus;
+  // How far the current preparation phase has got.
+  progress?: { done: number; total: number };
   error?: string;
   createdAt: string;
   topics: Topic[];

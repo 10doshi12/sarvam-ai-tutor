@@ -14,7 +14,8 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL: `http://localhost:${PORT}`,
-    trace: "retain-on-failure",
+    // Trace recording can freeze WebKit when a test closes after a long lesson.
+    trace: "off",
   },
   projects: [{ name: "webkit", use: { ...devices["Desktop Safari"] } }],
   webServer: {
