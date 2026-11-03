@@ -61,14 +61,14 @@ All calls use the header `api-subscription-key`, read from env var `SARVAM_API_K
 - `Level`: `school`, `college`, `expert`.
 - `LessonStatus`: `reading`, `planning`, `ready`, `failed`.
 - `Topic`: `id`, `title`, `summary`, `done` (boolean), `quizCorrect` (boolean or null).
-- `Lesson`: `id`, `title`, `filename`, `level`, `language`, `status`, `error` (optional), `createdAt`, `topics`.
+- `Lesson`: `id`, `title`, `filename`, `level`, `language`, `tutor` (optional, one of `TutorId`: `arjun`, `rohan`, `meera`, `anaya`), `status`, `error` (optional), `createdAt`, `topics`.
 - `BoardItem`: a flat object with `kind` (`heading`, `text`, `bullet`, `equation`, `diagram`), `text` (optional), `latex` (optional), `nodes` (optional, each `id`, `label`), `edges` (optional, each `from`, `to`, `label` optional).
 - `Step`: `say` (one or two short sentences), `clearBoard` (boolean), `board` (BoardItem array, written while `say` plays).
 - `Quiz`: `question`, `options` (strings), `correctIndex`, `explanation`.
 - `TopicScript`: `topicId`, `steps`, `quiz`.
 - `DoubtAnswer`: `question` (as understood, in the lesson language), `heardLanguage`, `steps`.
 
-`lib/config.ts` holds model ids, the language list with display names and voices, the file count limit, the 10 page limit, the 4 MB upload limit, topic and step counts, poll interval, source text limit, recording limits, and the prefetch count.
+`lib/config.ts` holds model ids, the language list with display names, the tutors with a voice per language, the file count limit, the 10 page limit, the 4 MB upload limit, topic and step counts, poll interval, source text limit, recording limits, and the prefetch count.
 
 ## Server interfaces
 
@@ -77,7 +77,7 @@ All calls use the header `api-subscription-key`, read from env var `SARVAM_API_K
 - `chatJson<T>({ model, system, user, schemaName, schema, maxTokens })` returns `Promise<T>`, including the retry.
 - `startDigitise(file: Blob, filename: string, language: LanguageCode)` returns `Promise<string>`, the job id.
 - `getDigitiseResult(jobId: string)` returns `Promise<{ status: "running" | "done" | "failed"; pagesProcessed: number; pagesTotal: number; markdown?: string; error?: string }>`. Treat `partially_completed` as done.
-- `synthesize(text: string, language: LanguageCode)` returns `Promise<Buffer>` of MP3.
+- `synthesize(text: string, language: LanguageCode, tutor: TutorId)` returns `Promise<Buffer>` of MP3.
 - `transcribe(audio: Blob, filename: string, keyterms?: string[])` returns `Promise<{ transcript: string; language: string | null }>`.
 - `translate(text: string, source: string, target: string, purpose: "doubt" | "caption")` returns `Promise<string>`, picking the model from the table.
 - `detectLanguage(text: string)` returns `Promise<string>`.
@@ -102,7 +102,7 @@ All stateless. Reject a `source` longer than the config limit with a 400.
 | POST `/api/plan` | Body per `planLesson`. |
 | POST `/api/script` | Body per `writeTopicScript`. |
 | POST `/api/doubt` | Body per `answerDoubt`. |
-| POST `/api/tts` | Body `{ text, language }`; `audio/mpeg` bytes. |
+| POST `/api/tts` | Body `{ text, language, tutor? }`, where an unknown or missing tutor uses the default; `audio/mpeg` bytes. |
 | POST `/api/stt` | Multipart `audio`, `keyterms`; `{ transcript, language }`. Empty transcript is a normal result. |
 | POST `/api/translate` | Body `{ text, target }`; `{ text }`, for captions. |
 
@@ -133,12 +133,12 @@ Every screen is a client component reading from browser storage.
 
 **Lesson, ready.** Fits one screen on desktop, so nothing the student needs falls below the fold:
 
-- Header: back button, lesson title, level and language chips.
-- Left: large whiteboard (black with a faint grid, thick frame, handwritten `Kalam` font; scripts it does not cover fall back to the system font), with the caption bar directly beneath it.
+- Header: back button, lesson title, level and language chips, tutor select.
+- Left: large whiteboard (black with a faint grid, thick frame, handwritten `Kalam` font; scripts it does not cover fall back to the system font), with the caption bar and its language selector directly beneath it.
 - Right column: avatar tile, topic list, and the Ask a doubt button. On small screens the button or doubt panel stays fixed at the bottom.
 - A Start button begins the lesson, because browsers only allow audio after a click.
 
-**Look.** Refined neobrutalism: white, black and one periwinkle accent, thick borders and hard offset shadows, Space Grotesk type. Red and green appear only for right, wrong and error feedback. Colours are tokens, never raw values in components. Frosted glass appears only on layers floating over the board (quiz, doubt answer, start and status cards), kept opaque enough for readable text. Icons are SVG. Touch targets are at least 44px, focus rings are always visible, and meaning never relies on colour alone.
+**Look.** Refined neobrutalism: white, black and one periwinkle accent, thick borders and hard offset shadows, Space Grotesk type. Red and green appear only for right, wrong and error feedback, plus red on the recording dot and on delete hover. Colours are tokens, never raw values in components, except the avatar illustration and the whiteboard scrollbar. Frosted glass appears only on layers floating over the board (quiz, doubt answer, start and status cards), kept opaque enough for readable text. Icons are SVG. Touch targets are at least 44px, focus rings are always visible, and meaning never relies on colour alone.
 
 An unknown lesson id, such as a link opened in another browser, shows a friendly message with a way home, because lessons live only in the browser that made them.
 
@@ -147,7 +147,7 @@ An unknown lesson id, such as a link opened in another browser, shows a friendly
 States, exposed as `data-state` on the player root: `idle`, `loading`, `speaking`, `listening`, `thinking`, `answering`, `quiz`, `done`, `error`.
 
 - **Audio.** One Web Audio context and one analyser. Each step's MP3 is fetched from `/api/tts`, decoded and played, and kept in memory for the session so replays cost nothing. The current sentence is always requested first and upcoming ones only after it arrives, because Sarvam answers parallel calls slowly. The first sentences are fetched when the lesson opens, before Start. The screen stays on `loading` until the first sentence can play, and each caption appears before its audio, so the student never faces a blank screen labelled as speaking. Speech can run faster than normal, set by a pace value in config. Every clip counts as finished shortly after its length even if the browser never reports the end, so blocked audio can never freeze the lesson. Clicking a topic switches to it at once, and all topic scripts are written in the background so switching does not wait. Prefetch the next topic's script when a topic starts.
-- **Avatar.** Four tutors share one animated rig, each with their own look and voice: Arjun (older, trim beard, glasses), Rohan (younger, hoodie), Meera (long hair, blazer) and Anaya (bob, round glasses). Chosen on the upload form and switchable inside a lesson. Shown from the waist up so the face stays large enough to read. SVG with shaded gradients, and parts that shift by different amounts as the head turns, so it reads as lightly 3D. Mouth opening follows analyser loudness each animation frame, written straight to the DOM, not through React state. Expressions come from the player state: listening, thinking, asking, excited, and happy or concerned after a quiz answer. It also blinks, nods on stressed words, lifts the phone hand while talking, and its eyes follow the pointer. Honour reduced motion.
+- **Avatar.** Four tutors share one animated rig, each with their own look and voice: Arjun (older, trim beard, glasses), Rohan (younger, hoodie), Meera (long hair, blazer) and Anaya (bob, round glasses). Chosen on the upload form and switchable inside a lesson. Shown from the waist up so the face stays large enough to read. SVG with shaded gradients, and parts that shift by different amounts as the head turns, so it reads as lightly 3D. Mouth opening follows analyser loudness each animation frame, written straight to the DOM, not through React state. Expressions come from the player state: listening, thinking, asking, excited, and happy or concerned after a quiz answer. It also blinks, nods on stressed words, lifts a hand while talking, and its eyes follow the pointer. Honour reduced motion.
 - **Whiteboard.** Items in a step reveal as handwriting, using a clip animation spread across that step's audio length. Equations go through KaTeX. Diagrams are boxes and arrows laid out left to right as SVG. Long content scrolls to the newest line. Render board text as text, never as injected HTML.
 - **Interrupting.** Ask a doubt stops audio within the click, snapshots the board, enters `listening`, and starts the mic. Recording ends on the send button, on silence (analyser energy) or at the recording limit, which stays below the 30 second cap. A text box is always there, and it is the fallback if the mic is refused or unavailable. Empty transcript shows "I didn't catch that" and returns to listening.
 - **Answering.** `thinking` while waiting, then the answer plays as steps on a clearly separate overlay on the board, so lesson notes survive. Afterwards, restore the snapshot and replay the interrupted step from its start. A student can interrupt an answer too.
@@ -155,7 +155,7 @@ States, exposed as `data-state` on the player root: `idle`, `loading`, `speaking
 - **Failures never stall the lesson.** If one step's audio fails, show the caption and hold for a time based on its length, then continue. If a script or doubt request fails, show the message with a retry.
 - **Reopening.** Opening a saved lesson resumes at the first topic not done.
 
-Add `data-testid` on: upload form fields, start button, ask button, doubt text box and send, quiz options, caption, topic list items, and the board.
+Add `data-testid` on: upload form fields, start button, ask button, doubt text box and send, quiz options, caption, topic list items, tutor select, and the board.
 
 ## Out of the MVP
 

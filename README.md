@@ -61,7 +61,7 @@ Step 3 matters because the app has no login of its own. Without it, anyone with 
 
 ```mermaid
 flowchart TD
-    A["Student chooses PDFs,<br/>level and language"] --> B["Sarvam reads the PDFs"]
+    A["Student chooses PDFs,<br/>tutor, level and language"] --> B["Sarvam reads the PDFs"]
     B --> C["Text is split into short topics"]
     C --> D["Tutor teaches a topic aloud<br/>and writes on the whiteboard"]
     D --> E{"Student has a doubt?"}
@@ -164,14 +164,15 @@ flowchart LR
 | Scenario | Expected outcome | Why it matters |
 |---|---|---|
 | Upload a PDF, start, interrupt with a typed doubt | The tutor answers, then repeats the interrupted sentence | This is the core promise of the product |
-| Reload during a lesson | The lesson and progress are still there | There is no database to fall back on |
+| Reload during a lesson | The lesson is still there | There is no database to fall back on |
 | Upload several PDFs | One lesson is built from all of them | Students can combine chapters |
 | One long PDF next to a short one | The short one still reaches the tutor | A long document must not silently hide another |
 | Upload a PDF over 10 pages, or too many PDFs | Refused with a clear message before anything is sent | Saves waiting and quota |
 | Speak a sentence, then transcribe it | The words come back | Proves the voice services work end to end |
 | Answer a quiz when audio never finishes | The lesson still moves on | The lesson must never freeze |
 | Click another topic | The tutor switches straight away | The student stays in charge |
-| Switch tutor inside a lesson, then reload | The new tutor and voice are still there | The choice belongs to the lesson |
+| Have each tutor say the same sentence | Each one sounds different | Choosing a tutor changes the voice, not just the face |
+| Switch tutor inside a lesson, then reload | The new tutor is still selected | The choice belongs to the lesson |
 
 The automated tests cannot use a microphone, because WebKit under Playwright has no fake one. Check spoken doubts by hand after changing that path.
 

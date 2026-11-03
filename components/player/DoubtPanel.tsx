@@ -46,7 +46,7 @@ export default function DoubtPanel({
         <p className="mb-2 max-h-24 overflow-y-auto rounded-lg border-2 border-danger bg-danger-soft px-2.5 py-1.5 text-sm font-medium text-danger">
           {notice}{" "}
           {canRetry && (
-            <button type="button" onClick={onRetry} className="font-bold underline">
+            <button type="button" onClick={onRetry} className="inline-flex min-h-11 items-center font-bold underline">
               Try again
             </button>
           )}
