@@ -1,4 +1,5 @@
 import { TIMING } from "@/lib/config";
+import { cached } from "./cache";
 import type { LanguageCode, TutorId } from "@/lib/types";
 
 export type Voice = { language: LanguageCode; tutor: TutorId };
@@ -43,15 +44,21 @@ export function getLevel(): number {
   return Math.sqrt(sum / levelData.length);
 }
 
-async function fetchAndDecode(text: string, { language, tutor }: Voice): Promise<AudioBuffer> {
-  const res = await fetch("/api/tts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, language, tutor }),
+// Fetches a sentence's MP3 once per device, so preparation can record it ahead of time.
+export function speechBytes(text: string, { language, tutor }: Voice): Promise<ArrayBuffer> {
+  return cached("speech", [tutor, language, text], async () => {
+    const res = await fetch("/api/tts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, language, tutor }),
+    });
+    if (!res.ok) throw new Error("Speech failed");
+    return res.arrayBuffer();
   });
-  if (!res.ok) throw new Error("Speech failed");
-  const bytes = await res.arrayBuffer();
-  return getAudioContext().decodeAudioData(bytes);
+}
+
+async function fetchAndDecode(text: string, voice: Voice): Promise<AudioBuffer> {
+  return getAudioContext().decodeAudioData(await speechBytes(text, voice));
 }
 
 const keyOf = (text: string, v: Voice) => `${v.tutor}:${v.language}:${text}`;

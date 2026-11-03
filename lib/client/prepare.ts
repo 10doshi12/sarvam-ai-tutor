@@ -1,7 +1,9 @@
-import type { Lesson, LanguageCode, Level, Topic, TutorId } from "@/lib/types";
+import type { Lesson, LanguageCode, Level, Topic, TopicScript, TutorId } from "@/lib/types";
 import { LIMITS, TIMING } from "@/lib/config";
 import { getLesson, saveLesson, saveSource } from "./storage";
 import { joinDocuments } from "@/lib/lesson/source";
+import { speechBytes } from "./audio";
+import { cached, pruneCache } from "./cache";
 import { getTopicScript } from "./scripts";
 
 export interface PrepareOptions {
@@ -77,28 +79,79 @@ function update(id: string, patch: Partial<Lesson>): Lesson {
 
 async function readDocument(file: File, language: LanguageCode): Promise<{ name: string; text: string }> {
   try {
-    return { name: file.name, text: await readMarkdown(await startJob(file, language)) };
+    const text = await cached("doc", [await file.arrayBuffer(), language], async () =>
+      readMarkdown(await startJob(file, language)),
+    );
+    return { name: file.name, text };
   } catch (e) {
     throw new Error(`${file.name}: ${e instanceof Error ? e.message : "could not be read."}`);
   }
 }
 
-async function run(id: string, files: File[], opts: PrepareOptions): Promise<void> {
-  try {
-    const docs = await Promise.all(files.map((f) => readDocument(f, opts.textbookLanguage)));
-    const source = joinDocuments(docs, LIMITS.maxSourceChars);
-    saveSource(id, source);
-    const lesson = update(id, { status: "planning" });
-
+async function planLesson(source: string, opts: PrepareOptions, filename: string): Promise<{ title: string; topics: Topic[] }> {
+  return cached("plan", [source, opts.level, opts.language, filename], async () => {
     const res = await fetch("/api/plan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source, level: opts.level, language: opts.language, filename: lesson.filename }),
+      body: JSON.stringify({ source, level: opts.level, language: opts.language, filename }),
     });
     if (!res.ok) throw new Error(await readError(res, "Could not plan the lesson."));
-    const plan = (await res.json()) as { title: string; topics: Topic[] };
-    const ready = update(id, { status: "ready", title: plan.title, topics: plan.topics, error: undefined });
-    if (ready.topics[0]) getTopicScript(ready, ready.topics[0]).catch(() => {});
+    return (await res.json()) as { title: string; topics: Topic[] };
+  });
+}
+
+async function inPool<T>(items: T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) await work(items[next++]);
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
+
+// Runs one phase's items, saving progress for the screen after each one.
+async function runPhase<T>(id: string, items: T[], limit: number, work: (item: T) => Promise<void>): Promise<void> {
+  let done = 0;
+  update(id, { progress: { done, total: items.length } });
+  await inPool(items, limit, async (item) => {
+    await work(item);
+    update(id, { progress: { done: ++done, total: items.length } });
+  });
+}
+
+// The last two phases are best effort: the player fetches anything missing when it is needed.
+async function writeAndVoice(id: string, lesson: Lesson, opts: PrepareOptions): Promise<void> {
+  const scripts = new Map<string, TopicScript>();
+  update(id, { status: "writing" });
+  await runPhase(id, lesson.topics, TIMING.maxConcurrentScripts, async (topic) => {
+    const script = await getTopicScript(lesson, topic).catch(() => null);
+    if (script) scripts.set(topic.id, script);
+  });
+
+  const lines = lesson.topics.flatMap((t) => {
+    const script = scripts.get(t.id);
+    return script ? [...script.steps.map((s) => s.say), script.quiz.explanation] : [];
+  });
+  update(id, { status: "voicing" });
+  await runPhase(id, [...new Set(lines)], TIMING.maxConcurrentVoicing, async (line) => {
+    await speechBytes(line, { language: opts.language, tutor: opts.tutor }).catch(() => undefined);
+  });
+}
+
+async function run(id: string, files: File[], opts: PrepareOptions): Promise<void> {
+  try {
+    const docs: { name: string; text: string }[] = [];
+    await runPhase(id, files, files.length, async (file) => {
+      docs[files.indexOf(file)] = await readDocument(file, opts.textbookLanguage);
+    });
+    const source = joinDocuments(docs, LIMITS.maxSourceChars);
+    saveSource(id, source);
+    const lesson = update(id, { status: "planning", progress: undefined });
+
+    const plan = await planLesson(source, opts, lesson.filename);
+    const planned = update(id, { title: plan.title, topics: plan.topics, error: undefined });
+    await writeAndVoice(id, planned, opts);
+    update(id, { status: "ready", progress: undefined });
+    void pruneCache();
   } catch (e) {
     const message = e instanceof Error ? e.message : "Something went wrong.";
     try {

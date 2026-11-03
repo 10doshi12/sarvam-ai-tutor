@@ -98,7 +98,7 @@ export default function LessonPlayer({ lesson: initial }: { lesson: Lesson }) {
       buffer = null;
     }
     if (!alive(t)) return;
-    // Sarvam answers parallel calls slowly, so the current sentence goes first.
+    // Each clip is slower when Sarvam answers in parallel, so the current sentence goes first.
     prefetchAudio(ahead, voice(), TIMING.maxConcurrentTts);
     const ms = buffer ? buffer.duration * 1000 : holdFor(step.say);
     const ref = target === "board" ? boardRef : answerRef;

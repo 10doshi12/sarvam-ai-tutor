@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { languageProblem } from "../lib/lesson/language";
 import { joinDocuments, shareSource } from "../lib/lesson/source";
 import { makeLongPdf, makePhotosynthesisPdf, makeVolcanoPdf } from "./fixtures/make-pdf";
 
@@ -244,4 +245,58 @@ test("a tutor switched inside a lesson is remembered", async ({ page }) => {
   await page.getByTestId("tutor-select").selectOption("meera");
   await page.reload();
   await expect(page.getByTestId("tutor-select")).toHaveValue("meera");
+});
+
+test("uploading the same PDF again reuses everything, and the phases are shown the first time", async ({ page }) => {
+  const paid: string[] = [];
+  page.on("request", (r) => {
+    if (/\/api\/(doc\/start|plan|script|tts)$/.test(new URL(r.url()).pathname)) paid.push(new URL(r.url()).pathname);
+  });
+  const pdf = await makeVolcanoPdf();
+
+  await uploadPdf(page, "volcanoes.pdf", pdf);
+  await expect(page.getByTestId("prep-reading")).toHaveAttribute("data-state", "current");
+  for (const phase of ["planning", "writing", "voicing"]) {
+    await expect(page.getByTestId(`prep-${phase}`)).toHaveAttribute("data-state", "current", { timeout: READY_TIMEOUT });
+  }
+  await expect(page.getByTestId("topic-item").first()).toBeVisible({ timeout: READY_TIMEOUT });
+  for (const api of ["doc/start", "plan", "script", "tts"]) expect(paid).toContain(`/api/${api}`);
+
+  // Everything the lesson will say was recorded up front, so playing it needs no speech request.
+  paid.length = 0;
+  await uploadPdf(page, "volcanoes.pdf", pdf);
+  await expect(page.getByTestId("topic-item").first()).toBeVisible({ timeout: STEP_TIMEOUT });
+  await page.getByTestId("start-button").click();
+  await expect(state(page)).toHaveAttribute("data-state", "speaking", { timeout: STEP_TIMEOUT });
+  expect(paid).toEqual([]);
+});
+
+test("a lesson still opens when writing its topics fails during preparation", async ({ page }) => {
+  await page.route("**/api/doc/start", (r) => r.fulfill({ json: { jobId: "job" } }));
+  await page.route("**/api/doc/job", (r) => r.fulfill({ json: { status: "done", markdown: "Plants make food." } }));
+  await page.route("**/api/plan", (r) =>
+    r.fulfill({ json: { title: "Plants", topics: [{ id: "t1", title: "Food", summary: "x", done: false, quizCorrect: null }] } }),
+  );
+  await page.route("**/api/script", (r) => r.fulfill({ status: 500, json: { error: "Busy" } }));
+
+  await uploadPdf(page, "plants.pdf", await makePhotosynthesisPdf());
+  await expect(page.getByTestId("topic-item").first()).toBeVisible({ timeout: STEP_TIMEOUT });
+  await expect(page.getByTestId("lesson-error")).toHaveCount(0);
+});
+
+test("a lesson asked for in Marathi from a long English book comes back in Marathi", async ({ request }) => {
+  const chapter =
+    "## Symmetric difference\n\nThe symmetric difference of two sets returns items found in exactly one set.\n\n```python\nprint({1, 2} ^ {2, 3})\n```\n\n" +
+    "## Subset checks\n\nA subset check can stop as soon as one item is missing, which saves work on large inputs.\n\n```python\n{1}.issubset({1, 2})\n```\n\n";
+  const lesson = { source: `=== Document: sets.pdf ===\n${chapter.repeat(40)}`, level: "college", language: "mr-IN" };
+
+  const planned = await request.post("/api/plan", { data: { ...lesson, filename: "sets.pdf" } });
+  expect(planned.ok()).toBeTruthy();
+  const plan = (await planned.json()) as { title: string; topics: { id: string; title: string; summary: string }[] };
+  expect(languageProblem("mr-IN", [plan.title, ...plan.topics.flatMap((t) => [t.title, t.summary])])).toBeNull();
+
+  const written = await request.post("/api/script", { data: { ...lesson, topic: plan.topics[0], topics: plan.topics } });
+  expect(written.ok()).toBeTruthy();
+  const script = (await written.json()) as { steps: { say: string }[]; quiz: { question: string; explanation: string } };
+  expect(languageProblem("mr-IN", [...script.steps.map((s) => s.say), script.quiz.question, script.quiz.explanation])).toBeNull();
 });

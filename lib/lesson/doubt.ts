@@ -1,6 +1,7 @@
 import { LIMITS, MODELS } from "@/lib/config";
 import { detectLanguage, translate } from "@/lib/sarvam";
 import type { DoubtAnswer, LanguageCode, Level, Topic } from "@/lib/types";
+import { languageProblem } from "./language";
 import { doubtPrompts } from "./prompts";
 import { shareSource } from "./source";
 import { chatValidated, doubtSchema, normalizeDoubt } from "./schemas";
@@ -25,6 +26,7 @@ export async function answerDoubt(a: {
   const out = await chatValidated(
     { model: MODELS.doubt, system, user, schemaName: "doubt_answer", schema: doubtSchema, maxTokens: LIMITS.doubtMaxTokens },
     (r) => normalizeDoubt(r, question),
+    (answer) => languageProblem(a.language, answer.steps.map((s) => s.say)),
   );
   return { ...out, heardLanguage: heard };
 }

@@ -12,8 +12,9 @@ It deploys to Vercel and also runs locally. Single user per browser, no login, n
 
 Vercel functions have a read-only filesystem, no lasting state between requests, and a 4.5 MB limit on request and response bodies. So:
 
+- **Sarvam calls have a time limit.** A stuck call fails with a clear message instead of hanging for minutes, and chat calls are tried again within the route limit.
 - **The server is stateless.** Routes only forward to Sarvam using the secret key. No disk writes, no in-memory caches or job maps, no background work after a response.
-- **The browser owns everything else.** It runs the preparation steps in order and keeps lessons in `localStorage`.
+- **The browser owns everything else.** It runs the preparation steps in order, keeps lessons in `localStorage` and keeps slow Sarvam results in IndexedDB.
 - **PDFs go through our server and are capped at 4 MB.** Sarvam's upload storage refuses direct browser uploads (its CORS rules return 403), so the 4.5 MB function limit applies.
 - **`localStorage` keeps the extracted text, not the PDF.** Browsers allow roughly 5 MB per site and strings only, so a textbook PDF would often not fit, and nothing needs the original after it has been read.
 - **Every long route exports `maxDuration`** as a literal number, within the 300 second maximum on the Hobby plan.
@@ -68,7 +69,7 @@ All calls use the header `api-subscription-key`, read from env var `SARVAM_API_K
 - `TopicScript`: `topicId`, `steps`, `quiz`.
 - `DoubtAnswer`: `question` (as understood, in the lesson language), `heardLanguage`, `steps`.
 
-`lib/config.ts` holds model ids, the language list with display names, the tutors with a voice per language, the file count limit, the 10 page limit, the 4 MB upload limit, topic and step counts, poll interval, source text limit, recording limits, and the prefetch count.
+`lib/config.ts` holds model ids, the language list with display names, the tutors with a voice per language, the file count limit, the 10 page limit, the 4 MB upload limit, topic and step counts, poll interval, source text limit, recording limits, the device cache version and size cap, and the prefetch count.
 
 ## Server interfaces
 
@@ -116,10 +117,15 @@ Errors are JSON `{ error: string }` with a sensible status. A missing key return
 
 1. Check the file count, then each file's size, `%PDF` and page count with `pdf-lib`, and refuse anything over a limit with a message naming the file, before any network call.
 2. Send each file to `/api/doc/start` at the same time and poll until its job finishes. If one fails, the lesson fails with a message naming that file. Join the markdown under a header line per document, sharing the text limit fairly so a long document cannot crowd out a short one, and save it.
-3. Call `/api/plan`, save the topics, status `ready`.
-4. Generate the first topic's script without blocking the screen.
+3. Status `planning`: call `/api/plan` and save the topics.
+4. Status `writing`: write every topic's script, a few at a time, saving a done and total count after each.
+5. Status `voicing`: record every sentence and quiz explanation, several at a time, saving the count after each. Each clip is slower in parallel, but the batch finishes far sooner. Then status `ready`.
 
-Nothing resumes if the tab closes mid-preparation, because the PDF is not kept. A lesson found still in `reading` or `planning` on load is marked failed, asking for a new upload.
+Steps 4 and 5 are best effort. A script or clip that fails does not fail the lesson, because the player fetches anything missing when it is needed. Waiting here is deliberate: it lets the lesson play and switch topics without pauses.
+
+`lib/client/cache.ts` keeps results in IndexedDB under a SHA-256 hash of what produced them, so the same input never pays twice, even in a new lesson: extracted text (PDF bytes and language), plan (text, level, language, file names), script (text, level, language, topic, topic titles), speech (tutor, language, sentence) and translated captions. Doubt answers are not cached. Plans, scripts and doubt answers are checked on the server: when most of the prose is not in the lesson language's script, the model is asked again with the problem appended, a limited number of times, and the last usable reply is kept rather than failing the lesson. The instruction is also repeated after the textbook, because a long book in another language can pull the reply into it. A share threshold in config leaves room for code and technical terms in English. Any cache failure counts as a miss. Cache Storage is not used because WebKit under Playwright lost its entries on navigation. Preparation ends by removing the oldest entries over the cap. Bump the version in config when prompts or voices change, which empties the cache. Deleting a lesson leaves its cached results, because other lessons can share them.
+
+Nothing resumes if the tab closes mid-preparation, because the PDF is not kept, so the screen warns before leaving. A lesson found still preparing on load is marked failed, asking for a new upload, and the cache makes that upload much faster.
 
 Script requests go through one helper that returns the stored script or fetches and stores it, and concurrent callers share one request.
 
@@ -129,7 +135,7 @@ Every screen is a client component reading from browser storage.
 
 **Home.** Upload form: PDF, tutor, level, lesson language, textbook language. The heading and form fit on one screen without scrolling, and a long file list scrolls inside the form. Past lessons below, with their progress and a delete action. A banner when the key is missing.
 
-**Lesson, while preparing.** Status in plain words (reading the book, planning topics), or the error with a way back.
+**Lesson, while preparing.** The four phases as a checklist (reading, planning, writing, recording) with the current one marked and a count of how far it has got, and a request to keep the tab open. Or the error with a way back.
 
 **Lesson, ready.** Fits one screen on desktop, so nothing the student needs falls below the fold:
 
@@ -146,7 +152,7 @@ An unknown lesson id, such as a link opened in another browser, shows a friendly
 
 States, exposed as `data-state` on the player root: `idle`, `loading`, `speaking`, `listening`, `thinking`, `answering`, `quiz`, `done`, `error`.
 
-- **Audio.** One Web Audio context and one analyser. Each step's MP3 is fetched from `/api/tts`, decoded and played, and kept in memory for the session so replays cost nothing. The current sentence is always requested first and upcoming ones only after it arrives, because Sarvam answers parallel calls slowly. The first sentences are fetched when the lesson opens, before Start. The screen stays on `loading` until the first sentence can play, and each caption appears before its audio, so the student never faces a blank screen labelled as speaking. Speech can run faster than normal, set by a pace value in config. Every clip counts as finished shortly after its length even if the browser never reports the end, so blocked audio can never freeze the lesson. Clicking a topic switches to it at once, and all topic scripts are written in the background so switching does not wait. Prefetch the next topic's script when a topic starts.
+- **Audio.** One Web Audio context and one analyser. Each step's MP3 normally comes from the device cache, recorded during preparation, and falls back to `/api/tts` (for example after switching tutor). It is decoded, played and kept in memory for the session. The current sentence is always requested first and upcoming ones only after it arrives, because each clip is slower when Sarvam answers calls in parallel. The first sentences are fetched when the lesson opens, before Start. The screen stays on `loading` until the first sentence can play, and each caption appears before its audio, so the student never faces a blank screen labelled as speaking. Speech can run faster than normal, set by a pace value in config. Every clip counts as finished shortly after its length even if the browser never reports the end, so blocked audio can never freeze the lesson. Clicking a topic switches to it at once, and all topic scripts are written in the background so switching does not wait. Prefetch the next topic's script when a topic starts.
 - **Avatar.** Four tutors share one animated rig, each with their own look and voice: Arjun (older, trim beard, glasses), Rohan (younger, hoodie), Meera (long hair, blazer) and Anaya (bob, round glasses). Chosen on the upload form and switchable inside a lesson. Shown from the waist up so the face stays large enough to read. SVG with shaded gradients, and parts that shift by different amounts as the head turns, so it reads as lightly 3D. Mouth opening follows analyser loudness each animation frame, written straight to the DOM, not through React state. Expressions come from the player state: listening, thinking, asking, excited, and happy or concerned after a quiz answer. It also blinks, nods on stressed words, lifts a hand while talking, and its eyes follow the pointer. Honour reduced motion.
 - **Whiteboard.** Items in a step reveal as handwriting, using a clip animation spread across that step's audio length. Equations go through KaTeX. Diagrams are boxes and arrows laid out left to right as SVG. Long content scrolls to the newest line. Render board text as text, never as injected HTML.
 - **Interrupting.** Ask a doubt stops audio within the click, snapshots the board, enters `listening`, and starts the mic. Recording ends on the send button, on silence (analyser energy) or at the recording limit, which stays below the 30 second cap. A text box is always there, and it is the fallback if the mic is refused or unavailable. Empty transcript shows "I didn't catch that" and returns to listening.

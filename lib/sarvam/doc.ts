@@ -1,5 +1,6 @@
 import "server-only";
 import JSZip from "jszip";
+import { TIMING } from "@/lib/config";
 import type { LanguageCode } from "@/lib/types";
 import { SarvamError } from "./errors";
 import { sarvamFetch, sarvamJson } from "./http";
@@ -12,14 +13,18 @@ export async function startDigitise(file: Blob, filename: string, language: Lang
   form.append("file", file, filename);
   form.append("language", language);
   form.append("output_format", "md");
-  const r = await sarvamJson<{ job_id: string }>("/doc-ai/v1/job/digitise", { method: "POST", body: form });
+  const r = await sarvamJson<{ job_id: string }>("/doc-ai/v1/job/digitise", {
+    method: "POST",
+    body: form,
+    signal: AbortSignal.timeout(TIMING.docUploadMs),
+  });
   return r.job_id;
 }
 
 // The output ZIP holds the markdown beside per-page metadata and a manifest.
 async function readMarkdown(jobId: string): Promise<string> {
   const dl = await sarvamJson<DownloadResponse>(`/doc-ai/v1/job/${encodeURIComponent(jobId)}/download-url`);
-  const res = await fetch(dl.url, { method: dl.method, headers: dl.headers });
+  const res = await fetch(dl.url, { method: dl.method, headers: dl.headers, signal: AbortSignal.timeout(TIMING.sarvamCallMs) });
   if (!res.ok) throw new SarvamError(502, "Could not download the read result from Sarvam.");
   const zip = await JSZip.loadAsync(await res.arrayBuffer());
   const entry = Object.values(zip.files).find((f) => !f.dir && f.name.toLowerCase().endsWith(".md"));
