@@ -1,4 +1,4 @@
-# AI Avatar Tutor: build brief
+# Doubtless: build brief
 
 The shared brief for everyone building this MVP. It says what to build and how to approach it, not the code.
 
@@ -41,7 +41,7 @@ Next.js 16 App Router, React 19, TypeScript, Tailwind 4, bun. Route handlers rec
 | Read the PDF | `sarvam-vision` | Doc AI. POST `/doc-ai/v1/job/digitise` multipart with `file`, `language`, `output_format=md` (not `markdown`, that returns 400). Poll GET `/doc-ai/v1/job/{id}/status` until `completed`, `partially_completed`, `failed` or `rejected`. Then GET `/doc-ai/v1/job/{id}/download-url` (returns `method`, `url`, `headers`; 409 before a terminal status), fetch the ZIP and read its `.md`. |
 | Plan topics, write topic scripts | `sarvam-105b` | POST `/v1/chat/completions` |
 | Answer doubts | `sarvam-105b-conversations` | Same endpoint; 32K context, so trim the source text to a config limit. |
-| Speak | `bulbul:v4-flash` | POST `/text-to-speech`, returns base64 in `audios[0]`. Ask for `output_audio_codec` `mp3` at a low bitrate to keep payloads small. Voices are persona ids, lowercase, one per language in config. The live API's speaker list is the source of truth: `ishita_en_edtech` appears in Sarvam's examples but the API rejects it. |
+| Speak | `bulbul:v4-flash` | POST `/text-to-speech`, returns base64 in `audios[0]`. Ask for `output_audio_codec` `mp3` at a low bitrate to keep payloads small. Voices are persona ids, lowercase, one per tutor and language in config. Where a language has too few personas, tutors share one, and Tamil's female tutors borrow English personas. The live API's speaker list is the source of truth: `ishita_en_edtech` appears in Sarvam's examples but the API rejects it. |
 | Hear a doubt | `saaras:v4` | POST `/speech-to-text` multipart: `file`, `model`, `language_code=unknown`, `mode=transcribe`, optional `keyterms` JSON array of up to 50 terms (pass topic titles). Accepts WebM and MP4, but rejects a file type with a codec suffix such as `audio/webm;codecs=opus`, so send the bare type. Hard cap of 30 seconds of audio. |
 | Translate a doubt asked in another language | `sarvam-translate:v1` | POST `/translate`; formal only, 2000 characters. |
 | Translate live captions | `mayura:v1` | POST `/translate`; 1000 characters, mode `modern-colloquial`. |
@@ -127,16 +127,18 @@ Script requests go through one helper that returns the stored script or fetches 
 
 Every screen is a client component reading from browser storage.
 
-**Home.** Upload form: PDF, level, lesson language, textbook language. Past lessons below, with their progress and a delete action. A banner when the key is missing.
+**Home.** Upload form: PDF, tutor, level, lesson language, textbook language. The heading and form fit on one screen without scrolling, and a long file list scrolls inside the form. Past lessons below, with their progress and a delete action. A banner when the key is missing.
 
 **Lesson, while preparing.** Status in plain words (reading the book, planning topics), or the error with a way back.
 
-**Lesson, ready.** Layout A, as approved in the mockup:
+**Lesson, ready.** Fits one screen on desktop, so nothing the student needs falls below the fold:
 
-- Header chips: lesson title, level, language.
-- Large whiteboard on the left: dark green board, wood frame, handwritten font (`Kalam` via `next/font`, which covers Latin and Devanagari; other scripts fall back to the system font).
-- Right column: avatar tile, caption of the current sentence with a caption-language selector (default off), topic list with progress, and the Ask a doubt button.
+- Header: back button, lesson title, level and language chips.
+- Left: large whiteboard (black with a faint grid, thick frame, handwritten `Kalam` font; scripts it does not cover fall back to the system font), with the caption bar directly beneath it.
+- Right column: avatar tile, topic list, and the Ask a doubt button. On small screens the button or doubt panel stays fixed at the bottom.
 - A Start button begins the lesson, because browsers only allow audio after a click.
+
+**Look.** Refined neobrutalism: white, black and one periwinkle accent, thick borders and hard offset shadows, Space Grotesk type. Red and green appear only for right, wrong and error feedback. Colours are tokens, never raw values in components. Frosted glass appears only on layers floating over the board (quiz, doubt answer, start and status cards), kept opaque enough for readable text. Icons are SVG. Touch targets are at least 44px, focus rings are always visible, and meaning never relies on colour alone.
 
 An unknown lesson id, such as a link opened in another browser, shows a friendly message with a way home, because lessons live only in the browser that made them.
 
@@ -145,7 +147,7 @@ An unknown lesson id, such as a link opened in another browser, shows a friendly
 States, exposed as `data-state` on the player root: `idle`, `loading`, `speaking`, `listening`, `thinking`, `answering`, `quiz`, `done`, `error`.
 
 - **Audio.** One Web Audio context and one analyser. Each step's MP3 is fetched from `/api/tts`, decoded and played, and kept in memory for the session so replays cost nothing. The current sentence is always requested first and upcoming ones only after it arrives, because Sarvam answers parallel calls slowly. The first sentences are fetched when the lesson opens, before Start. The screen stays on `loading` until the first sentence can play, and each caption appears before its audio, so the student never faces a blank screen labelled as speaking. Speech can run faster than normal, set by a pace value in config. Every clip counts as finished shortly after its length even if the browser never reports the end, so blocked audio can never freeze the lesson. Clicking a topic switches to it at once, and all topic scripts are written in the background so switching does not wait. Prefetch the next topic's script when a topic starts.
-- **Avatar.** SVG with shaded gradients, and parts that shift by different amounts as the head turns, so it reads as lightly 3D. Mouth opening follows analyser loudness each animation frame, written straight to the DOM, not through React state. Expressions come from the player state: listening, thinking, asking, excited, and happy or concerned after a quiz answer. It also blinks, nods on stressed words, raises a hand while talking, and its eyes follow the pointer. Honour reduced motion.
+- **Avatar.** Four tutors share one animated rig, each with their own look and voice: Arjun (older, trim beard, glasses), Rohan (younger, hoodie), Meera (long hair, blazer) and Anaya (bob, round glasses). Chosen on the upload form and switchable inside a lesson. Shown from the waist up so the face stays large enough to read. SVG with shaded gradients, and parts that shift by different amounts as the head turns, so it reads as lightly 3D. Mouth opening follows analyser loudness each animation frame, written straight to the DOM, not through React state. Expressions come from the player state: listening, thinking, asking, excited, and happy or concerned after a quiz answer. It also blinks, nods on stressed words, lifts the phone hand while talking, and its eyes follow the pointer. Honour reduced motion.
 - **Whiteboard.** Items in a step reveal as handwriting, using a clip animation spread across that step's audio length. Equations go through KaTeX. Diagrams are boxes and arrows laid out left to right as SVG. Long content scrolls to the newest line. Render board text as text, never as injected HTML.
 - **Interrupting.** Ask a doubt stops audio within the click, snapshots the board, enters `listening`, and starts the mic. Recording ends on the send button, on silence (analyser energy) or at the recording limit, which stays below the 30 second cap. A text box is always there, and it is the fallback if the mic is refused or unavailable. Empty transcript shows "I didn't catch that" and returns to listening.
 - **Answering.** `thinking` while waiting, then the answer plays as steps on a clearly separate overlay on the board, so lesson notes survive. Afterwards, restore the snapshot and replay the interrupted step from its start. A student can interrupt an answer too.

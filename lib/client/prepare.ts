@@ -1,4 +1,4 @@
-import type { Lesson, LanguageCode, Level, Topic } from "@/lib/types";
+import type { Lesson, LanguageCode, Level, Topic, TutorId } from "@/lib/types";
 import { LIMITS, TIMING } from "@/lib/config";
 import { getLesson, saveLesson, saveSource } from "./storage";
 import { joinDocuments } from "@/lib/lesson/source";
@@ -8,6 +8,7 @@ export interface PrepareOptions {
   level: Level;
   language: LanguageCode;
   textbookLanguage: LanguageCode;
+  tutor: TutorId;
 }
 
 // Lessons being prepared in this tab. Lives at module level so it survives page navigation.
@@ -121,6 +122,7 @@ export async function prepareLesson(files: File[], opts: PrepareOptions): Promis
     filename: files.map((f) => f.name).join(", "),
     level: opts.level,
     language: opts.language,
+    tutor: opts.tutor,
     status: "reading",
     createdAt: new Date().toISOString(),
     topics: [],

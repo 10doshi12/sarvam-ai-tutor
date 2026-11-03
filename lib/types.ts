@@ -13,6 +13,8 @@ export type LanguageCode =
 
 export type Level = "school" | "college" | "expert";
 
+export type TutorId = "arjun" | "rohan" | "meera" | "anaya";
+
 export type LessonStatus = "reading" | "planning" | "ready" | "failed";
 
 export interface Topic {
@@ -29,6 +31,8 @@ export interface Lesson {
   filename: string;
   level: Level;
   language: LanguageCode;
+  // Missing on lessons made before tutors could be chosen.
+  tutor?: TutorId;
   status: LessonStatus;
   error?: string;
   createdAt: string;

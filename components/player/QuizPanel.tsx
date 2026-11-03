@@ -1,6 +1,7 @@
 import type { Quiz } from "@/lib/types";
+import Icon from "@/components/ui/Icon";
 
-// One question; after a pick, the right option goes green and the wrong pick red.
+// One question; after a pick, the right option and a wrong pick are marked by icon as well as colour.
 export default function QuizPanel({
   quiz,
   selected,
@@ -14,11 +15,11 @@ export default function QuizPanel({
 }) {
   const answered = selected !== null;
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#17322b]/85 p-4">
-      <div className="w-full max-w-xl rounded-2xl bg-[#faf7f0] p-5 shadow-xl">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8a7f6a]">Quick question</p>
-        <h3 className="mb-3 mt-1 text-lg font-semibold text-[#2b2a27]">{quiz.question}</h3>
-        <div className="grid gap-2">
+    <div className="board-scrim absolute inset-0 z-10 flex items-center justify-center overflow-y-auto p-4">
+      <div className="glass my-auto w-full max-w-xl p-5 sm:p-6">
+        <p className="nb-label text-accent-deep">Quick question</p>
+        <h3 className="mt-1 mb-4 text-xl leading-snug font-bold tracking-tight">{quiz.question}</h3>
+        <div className="grid gap-2.5">
           {quiz.options.map((option, i) => {
             const right = answered && i === quiz.correctIndex;
             const wrong = answered && i === selected && i !== quiz.correctIndex;
@@ -30,34 +31,34 @@ export default function QuizPanel({
                 data-result={right ? "right" : wrong ? "wrong" : undefined}
                 disabled={answered}
                 onClick={() => onPick(i)}
-                className={`rounded-xl border px-4 py-2.5 text-left text-[15px] transition ${
+                className={`flex min-h-11 items-center gap-3 rounded-lg border-2 border-ink px-3 py-2 text-left transition-transform ${
                   right
-                    ? "border-[#3d7a4f] bg-[#e3f1e6] text-[#1f4d2e]"
+                    ? "bg-success-soft font-bold text-success"
                     : wrong
-                      ? "border-[#c8452f] bg-[#fbe6e1] text-[#8a2a1a]"
-                      : "border-[#d8d0c0] bg-white text-[#2b2a27] hover:border-[#8a6a43] disabled:opacity-60"
+                      ? "bg-danger-soft font-bold text-danger"
+                      : answered
+                        ? "bg-surface/70 text-muted"
+                        : "bg-surface hover:-translate-y-px hover:bg-accent"
                 }`}
               >
-                {option}
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-md border-2 border-current text-xs font-bold">
+                  {right ? <Icon name="check" size={14} /> : wrong ? <Icon name="x" size={14} /> : String.fromCharCode(65 + i)}
+                </span>
+                <span className="min-w-0">{option}</span>
               </button>
             );
           })}
         </div>
         {answered && (
-          <>
-            <p className="mt-3 text-sm text-[#5b574f]" role="status">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <p className="text-[15px] leading-snug" role="status">
               <b>{selected === quiz.correctIndex ? "Correct. " : "Not quite. "}</b>
               {quiz.explanation}
             </p>
-            <button
-              type="button"
-              data-testid="quiz-next"
-              onClick={onNext}
-              className="mt-3 rounded-full bg-[#c8452f] px-5 py-2 text-sm font-semibold text-white transition hover:bg-[#b23c28]"
-            >
-              Continue
+            <button type="button" data-testid="quiz-next" onClick={onNext} className="nb-btn nb-btn-primary shrink-0">
+              Continue <Icon name="arrow" />
             </button>
-          </>
+          </div>
         )}
       </div>
     </div>

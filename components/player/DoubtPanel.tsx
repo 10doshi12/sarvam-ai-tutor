@@ -1,5 +1,7 @@
 "use client";
 
+import Icon from "@/components/ui/Icon";
+
 export type DoubtPhase = "listening" | "thinking";
 
 // Text box is always present; the mic is optional.
@@ -26,56 +28,53 @@ export default function DoubtPanel({
 }) {
   const thinking = phase === "thinking";
   return (
-    <div className="rounded-xl border border-[#c8452f]/40 bg-white p-3 shadow-sm">
-      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-[#2b2a27]" role="status">
+    <div className="nb-card max-h-[70dvh] overflow-y-auto p-3">
+      <div className="mb-2 flex items-center gap-2 text-sm font-bold" role="status">
         {thinking ? (
           <>
-            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#8a6a43]" /> Thinking about your doubt
+            <span className="nb-pulse size-3 rounded-sm bg-ink" aria-hidden="true" /> Thinking about your doubt
           </>
         ) : mic === "recording" ? (
           <>
-            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-[#c8452f]" /> Listening. Speak, then press Send.
+            <span className="nb-pulse size-3 rounded-full bg-danger" aria-hidden="true" /> Listening. Speak, then press Send.
           </>
         ) : (
           <>Type your doubt below.</>
         )}
       </div>
       {notice && (
-        <p className="mb-2 rounded-md bg-[#fbe6e1] px-2 py-1.5 text-[13px] text-[#8a2a1a]">
+        <p className="mb-2 max-h-24 overflow-y-auto rounded-lg border-2 border-danger bg-danger-soft px-2.5 py-1.5 text-sm font-medium text-danger">
           {notice}{" "}
           {canRetry && (
-            <button type="button" onClick={onRetry} className="font-semibold underline">
+            <button type="button" onClick={onRetry} className="font-bold underline">
               Try again
             </button>
           )}
         </p>
       )}
-      <textarea
-        data-testid="doubt-input"
-        value={text}
-        disabled={thinking}
-        rows={2}
-        onChange={(e) => onText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            onSend();
-          }
-        }}
-        placeholder="Type your doubt here"
-        className="w-full resize-none rounded-lg border border-[#d8d0c0] bg-[#faf7f0] px-2.5 py-2 text-[15px] text-[#2b2a27] outline-none focus:border-[#8a6a43]"
-      />
-      <div className="mt-2 flex gap-2">
-        <button
-          type="button"
-          data-testid="doubt-send"
+      <label className="block space-y-1">
+        <span className="nb-label">Your doubt</span>
+        <textarea
+          data-testid="doubt-input"
+          value={text}
           disabled={thinking}
-          onClick={onSend}
-          className="flex-1 rounded-full bg-[#c8452f] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          Send
+          rows={2}
+          onChange={(e) => onText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              onSend();
+            }
+          }}
+          placeholder="Or type it here"
+          className="nb-field resize-none"
+        />
+      </label>
+      <div className="mt-3 flex gap-3">
+        <button type="button" data-testid="doubt-send" disabled={thinking} onClick={onSend} className="nb-btn nb-btn-primary flex-1">
+          <Icon name="send" size={18} /> Send
         </button>
-        <button type="button" onClick={onCancel} className="rounded-full border border-[#d8d0c0] px-4 py-2 text-sm text-[#5b574f]">
+        <button type="button" onClick={onCancel} className="nb-btn nb-btn-ghost">
           Cancel
         </button>
       </div>

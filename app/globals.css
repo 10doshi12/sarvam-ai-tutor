@@ -1,23 +1,224 @@
 @import "tailwindcss";
 
 :root {
-  --paper: #f4efe6;
-  --ink: #2b2a27;
-  --accent: #c8452f;
-  --board: #17322b;
+  --paper: #ffffff;
+  --surface: #ffffff;
+  --ink: #000000;
+  --muted: #525252;
+  --accent: #b3b7ff;
+  --accent-deep: #4347c4;
+  --danger: #a8281c;
+  --danger-soft: #fbe3de;
+  --success: #1f6b3e;
+  --success-soft: #dff0df;
+  --disabled: #ececf0;
+  --board: #0b0b10;
+  --chalk: #ffffff;
+  --chalk-accent: #c8caff;
+  --chalk-line: #a6aaff;
+  --shadow: 4px 4px 0 var(--ink);
+  --shadow-lg: 7px 7px 0 var(--ink);
 }
 
 @theme inline {
   --color-paper: var(--paper);
+  --color-surface: var(--surface);
   --color-ink: var(--ink);
+  --color-muted: var(--muted);
   --color-accent: var(--accent);
+  --color-accent-deep: var(--accent-deep);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
   --color-board: var(--board);
+  --color-chalk: var(--chalk);
+  --color-chalk-accent: var(--chalk-accent);
+  --color-chalk-line: var(--chalk-line);
 }
 
-body {
-  background: var(--paper);
-  color: var(--ink);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+@layer base {
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-ui), var(--font-deva), system-ui, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  button:not(:disabled),
+  select:not(:disabled),
+  label[data-drop],
+  a {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 3px solid var(--ink);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  .nb-card {
+    background: var(--surface);
+    border: 2px solid var(--ink);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+
+  .nb-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    padding: 0.5rem 1.1rem;
+    border: 2px solid var(--ink);
+    border-radius: 10px;
+    font-weight: 700;
+    box-shadow: var(--shadow);
+    transition:
+      transform 120ms ease-out,
+      box-shadow 120ms ease-out;
+  }
+
+  .nb-btn:hover:not(:disabled) {
+    transform: translate(-1px, -1px);
+    box-shadow: 5px 5px 0 var(--ink);
+  }
+
+  .nb-btn:active:not(:disabled) {
+    transform: translate(3px, 3px);
+    box-shadow: 1px 1px 0 var(--ink);
+  }
+
+  .nb-btn:disabled {
+    background: var(--disabled);
+    color: var(--muted);
+    box-shadow: none;
+    cursor: not-allowed;
+  }
+
+  .nb-btn-primary {
+    background: var(--ink);
+    color: var(--surface);
+  }
+
+  .nb-btn-primary:not(:disabled) {
+    box-shadow: 4px 4px 0 var(--accent-deep);
+  }
+
+  .nb-btn-primary:hover:not(:disabled) {
+    box-shadow: 5px 5px 0 var(--accent-deep);
+  }
+
+  .nb-btn-primary:active:not(:disabled) {
+    box-shadow: 1px 1px 0 var(--accent-deep);
+  }
+
+  .nb-btn-accent {
+    background: var(--accent);
+    color: var(--ink);
+  }
+
+  .nb-btn-ghost {
+    background: var(--surface);
+    color: var(--ink);
+  }
+
+  .nb-btn-icon {
+    width: 44px;
+    padding: 0;
+  }
+
+  .nb-field {
+    width: 100%;
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    background: var(--surface);
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+    color: var(--ink);
+    font-size: 16px;
+  }
+
+  /* Native selects ignore min-height in WebKit, so they draw their own arrow. */
+  select.nb-field {
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 2rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.6rem center;
+    background-size: 1rem;
+  }
+
+  .nb-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.15rem 0.6rem;
+    background: var(--surface);
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+
+  .nb-label {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .nb-board {
+    background-color: var(--board);
+    background-image:
+      linear-gradient(rgb(255 255 255 / 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 255 255 / 0.03) 1px, transparent 1px);
+    background-size: 28px 28px;
+    border: 3px solid var(--ink);
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+  }
+
+  /* Glass is only for layers floating over the board; opacity stays high so text keeps its contrast. */
+  .glass {
+    background: rgb(255 255 255 / 0.9);
+    -webkit-backdrop-filter: blur(14px) saturate(140%);
+    backdrop-filter: blur(14px) saturate(140%);
+    border: 2px solid var(--ink);
+    border-radius: 14px;
+    box-shadow: var(--shadow-lg);
+    color: var(--ink);
+  }
+
+  .glass-dark {
+    background: rgb(11 11 16 / 0.84);
+    -webkit-backdrop-filter: blur(14px) saturate(130%);
+    backdrop-filter: blur(14px) saturate(130%);
+    border: 2px solid var(--chalk);
+    border-radius: 12px;
+    color: var(--chalk);
+  }
+
+  /* Dims the board behind a floating layer so notes do not fight with its text. */
+  .board-scrim {
+    background: rgb(11 11 16 / 0.6);
+  }
+
+  .nb-pulse {
+    animation: nb-pulse 1s steps(2, jump-none) infinite;
+  }
+}
+
+@keyframes nb-pulse {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.25;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -25,8 +226,4 @@ body {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
-}
-
-.font-board {
-  font-family: var(--font-board), system-ui, sans-serif;
 }

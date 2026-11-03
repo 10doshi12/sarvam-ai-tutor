@@ -1,4 +1,4 @@
-# AI Avatar Tutor
+# Doubtless
 
 Upload a textbook chapter and an animated tutor teaches it to you out loud, writing notes on a whiteboard as it talks. Interrupt at any moment with a doubt, spoken or typed. The tutor stops, answers from your book, then picks up from the sentence it was on.
 
@@ -153,7 +153,7 @@ flowchart LR
 | Upload and preparation | Checks the PDFs in the browser, has Sarvam read them, and joins them into one lesson. If there is too much text, each document gets a fair share. |
 | Lesson writer | Plans the topics and writes what the tutor says and writes for each one, matched to the level and language. |
 | Player | Runs the lesson: speech, topic switching, interruptions, quizzes and progress. |
-| Avatar | A shaded, lightly 3D character whose mouth follows the audio. It blinks, nods, gestures, follows the pointer and changes expression with the moment. |
+| Avatar | Four shaded, lightly 3D tutors to choose from, each with their own look and voice, whose mouths follow the audio. It blinks, nods, gestures, follows the pointer and changes expression with the moment. |
 | Whiteboard | Writes notes, equations and simple diagrams in time with each sentence. Answers to doubts appear on a separate overlay so the lesson notes survive. |
 | Doubts | Hears or reads the question, translates it if it is in another language, and answers from the book. |
 | Sarvam connection | The server's only outside link, and the only place that uses the secret key. |
@@ -171,6 +171,7 @@ flowchart LR
 | Speak a sentence, then transcribe it | The words come back | Proves the voice services work end to end |
 | Answer a quiz when audio never finishes | The lesson still moves on | The lesson must never freeze |
 | Click another topic | The tutor switches straight away | The student stays in charge |
+| Switch tutor inside a lesson, then reload | The new tutor and voice are still there | The choice belongs to the lesson |
 
 The automated tests cannot use a microphone, because WebKit under Playwright has no fake one. Check spoken doubts by hand after changing that path.
 
@@ -181,20 +182,4 @@ The automated tests cannot use a microphone, because WebKit under Playwright has
 - Quality depends on the PDF. Poorly printed scans may be read badly.
 - Whiteboard handwriting covers Latin and Devanagari. Other scripts use the system font.
 - If one PDF cannot be read, the lesson fails with a message naming that file.
-
-## Phases
-
-| Phase | Status |
-|---|---|
-| Working lesson flow: upload, teach, interrupt, quiz | Done |
-| Several PDFs per lesson, topic switching, expressive avatar | Done |
-| First deployment on Vercel | Next |
-
-## Open questions
-
-| Question | Owner |
-|---|---|
-| Should a public version have its own login and usage limits? | Dashank |
-| Is it worth lifting the upload size limit by sending files to Sarvam's storage in pieces through the server? | Dashank |
-| Which voice suits each language best? Each has one voice chosen so far. | Dashank |
-| Should lessons sync across devices, which would need a database? | Dashank |
+- Some languages have too few voices, so tutors share one, and the female tutors speak Tamil with an English voice.

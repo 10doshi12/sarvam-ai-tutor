@@ -14,7 +14,7 @@ export default function HealthBanner() {
 
   if (!missing) return null;
   return (
-    <p role="alert" data-testid="key-banner" className="rounded-md border border-accent bg-accent/10 px-4 py-3 text-sm">
+    <p role="alert" data-testid="key-banner" className="rounded-lg border-2 border-danger bg-danger-soft px-4 py-3 text-sm font-medium text-danger">
       The Sarvam API key is not set. Add SARVAM_API_KEY to .env locally, or to the Vercel project settings, then restart.
     </p>
   );
