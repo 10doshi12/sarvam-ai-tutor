@@ -1,4 +1,5 @@
 import type { Topic } from "@/lib/types";
+import Icon from "@/components/ui/Icon";
 
 export default function TopicList({
   topics,
@@ -13,36 +14,34 @@ export default function TopicList({
 }) {
   const done = topics.filter((t) => t.done).length;
   return (
-    <div className="rounded-xl border border-[#d8d0c0] bg-white px-3 py-2.5">
-      <div className="mb-1.5 flex items-baseline justify-between text-[11px] font-semibold uppercase tracking-wide text-[#8a7f6a]">
-        <span>Topics</span>
-        <span>
+    <div className="nb-card flex flex-col p-3 lg:min-h-0 lg:flex-1">
+      <div className="mb-2 flex items-baseline justify-between">
+        <span className="nb-label">Topics</span>
+        <span className="text-sm text-muted">
           {done} of {topics.length} done
         </span>
       </div>
-      <ol className="max-h-44 space-y-0.5 overflow-y-auto text-[14px]">
+      <ol className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1">
         {topics.map((t, i) => {
           const now = started && i === current;
           return (
-            <li
-              key={t.id}
-              data-testid="topic-item"
-              data-done={t.done}
-              aria-current={now ? "step" : undefined}
-            >
+            <li key={t.id} data-testid="topic-item" data-done={t.done}>
               <button
                 type="button"
+                aria-current={now ? "step" : undefined}
                 onClick={() => onPick(i)}
-                className={`flex w-full items-start gap-2 rounded-md px-1.5 py-1 text-left transition hover:bg-[#f6efd9] ${now ? "bg-[#f6efd9] font-semibold text-[#2b2a27]" : "text-[#5b574f]"}`}
+                className={`flex min-h-11 w-full items-center gap-2.5 rounded-lg border-2 px-2 py-1.5 text-left text-[15px] leading-snug transition-colors ${
+                  now ? "border-ink bg-accent font-bold" : "border-transparent hover:border-ink"
+                }`}
               >
                 <span
-                  className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border text-[10px] ${
-                    t.done ? "border-[#3d7a4f] bg-[#3d7a4f] text-white" : now ? "border-[#c8452f] text-[#c8452f]" : "border-[#c9bfa9]"
+                  className={`flex size-6 shrink-0 items-center justify-center rounded-md border-2 border-ink text-xs font-bold ${
+                    t.done ? "bg-ink text-surface" : "bg-surface"
                   }`}
                 >
-                  {t.done ? "✓" : ""}
+                  {t.done ? <Icon name="check" size={14} /> : i + 1}
                 </span>
-                <span>{t.title}</span>
+                <span className="min-w-0">{t.title}</span>
               </button>
             </li>
           );

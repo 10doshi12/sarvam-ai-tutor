@@ -1,5 +1,7 @@
 import { TIMING } from "@/lib/config";
-import type { LanguageCode } from "@/lib/types";
+import type { LanguageCode, TutorId } from "@/lib/types";
+
+export type Voice = { language: LanguageCode; tutor: TutorId };
 
 // One shared Web Audio context, analyser and playback slot for the whole session.
 let ctx: AudioContext | null = null;
@@ -41,37 +43,37 @@ export function getLevel(): number {
   return Math.sqrt(sum / levelData.length);
 }
 
-async function fetchAndDecode(text: string, language: LanguageCode): Promise<AudioBuffer> {
+async function fetchAndDecode(text: string, { language, tutor }: Voice): Promise<AudioBuffer> {
   const res = await fetch("/api/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, language }),
+    body: JSON.stringify({ text, language, tutor }),
   });
   if (!res.ok) throw new Error("Speech failed");
   const bytes = await res.arrayBuffer();
   return getAudioContext().decodeAudioData(bytes);
 }
 
-const keyOf = (text: string, language: LanguageCode) => `${language}:${text}`;
+const keyOf = (text: string, v: Voice) => `${v.tutor}:${v.language}:${text}`;
 
 // Shared by prefetch and playback so a replay costs nothing.
-export function loadAudio(text: string, language: LanguageCode): Promise<AudioBuffer> {
-  const key = keyOf(text, language);
+export function loadAudio(text: string, voice: Voice): Promise<AudioBuffer> {
+  const key = keyOf(text, voice);
   let hit = cache.get(key);
   if (!hit) {
-    hit = fetchAndDecode(text, language);
+    hit = fetchAndDecode(text, voice);
     cache.set(key, hit);
     hit.catch(() => cache.delete(key));
   }
   return hit;
 }
 
-export function prefetchAudio(texts: string[], language: LanguageCode, maxParallel: number): void {
+export function prefetchAudio(texts: string[], voice: Voice, maxParallel: number): void {
   for (const text of texts) {
-    if (cache.has(keyOf(text, language))) continue;
+    if (cache.has(keyOf(text, voice))) continue;
     const run = () => {
       activePrefetch++;
-      loadAudio(text, language)
+      loadAudio(text, voice)
         .catch(() => undefined)
         .finally(() => {
           activePrefetch--;

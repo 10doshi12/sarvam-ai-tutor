@@ -1,12 +1,12 @@
 import "server-only";
-import { LANGUAGES, LIMITS, MODELS, SPEECH } from "@/lib/config";
-import type { LanguageCode } from "@/lib/types";
+import { LIMITS, MODELS, SPEECH, TUTORS } from "@/lib/config";
+import type { LanguageCode, TutorId } from "@/lib/types";
 import { SarvamError } from "./errors";
 import { postJson, sarvamJson } from "./http";
 
-export async function synthesize(text: string, language: LanguageCode): Promise<Buffer> {
-  const voice = LANGUAGES.find((l) => l.code === language)?.voice;
-  if (!voice) throw new SarvamError(400, "Unsupported lesson language.");
+export async function synthesize(text: string, language: LanguageCode, tutor: TutorId): Promise<Buffer> {
+  const voice = TUTORS.find((t) => t.id === tutor)?.voices[language];
+  if (!voice) throw new SarvamError(400, "Unsupported tutor or language.");
   const r = await postJson<{ audios?: string[] }>("/text-to-speech", {
     text: text.slice(0, LIMITS.maxTtsChars),
     language_code: language,

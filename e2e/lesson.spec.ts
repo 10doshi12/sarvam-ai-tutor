@@ -213,3 +213,35 @@ test("a long document cannot crowd a short one out, even when trimmed twice", ()
   expect(lessonText.length).toBeLessThanOrEqual(3000);
   expect(doubtText.length).toBeLessThanOrEqual(1000);
 });
+
+test("each tutor speaks with a different voice", async ({ request }) => {
+  const text = "Plants make their own food from sunlight.";
+  const audio = await Promise.all(
+    ["arjun", "rohan", "meera", "anaya"].map(async (tutor) => {
+      const res = await request.post("/api/tts", { data: { text, language: "en-IN", tutor } });
+      expect(res.ok()).toBeTruthy();
+      return (await res.body()).toString("base64");
+    }),
+  );
+  expect(new Set(audio).size).toBe(4);
+});
+
+test("a tutor switched inside a lesson is remembered", async ({ page }) => {
+  const id = "66666666-6666-4666-8666-666666666666";
+  await page.addInitScript((lessonId) => {
+    if (localStorage.getItem("sc:lessons")) return;
+    localStorage.setItem(
+      "sc:lessons",
+      JSON.stringify([
+        { id: lessonId, title: "Tutors", filename: "t.pdf", level: "school", language: "en-IN", status: "ready", createdAt: new Date().toISOString(), topics: [{ id: "t1", title: "One", summary: "x", done: false, quizCorrect: null }] },
+      ]),
+    );
+    localStorage.setItem(`sc:source:${lessonId}`, "Plants make food.");
+    localStorage.setItem(`sc:script:${lessonId}:t1`, JSON.stringify({ topicId: "t1", steps: [{ say: "Hello.", clearBoard: false, board: [] }], quiz: { question: "Ok?", options: ["Yes", "No"], correctIndex: 0, explanation: "Good." } }));
+  }, id);
+
+  await page.goto(`/lessons/${id}`);
+  await page.getByTestId("tutor-select").selectOption("meera");
+  await page.reload();
+  await expect(page.getByTestId("tutor-select")).toHaveValue("meera");
+});

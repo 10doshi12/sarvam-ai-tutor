@@ -2,17 +2,18 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { BoardItem, DoubtAnswer, Lesson, Quiz, Step, TopicScript } from "@/lib/types";
-import { LANGUAGES, LEVELS, TIMING } from "@/lib/config";
+import type { BoardItem, DoubtAnswer, Lesson, Quiz, Step, TopicScript, TutorId } from "@/lib/types";
+import { DEFAULT_TUTOR, LANGUAGES, LEVELS, TIMING, TUTORS } from "@/lib/config";
 import { getSource, saveLesson } from "@/lib/client/storage";
 import { getTopicScript } from "@/lib/client/scripts";
-import { cancelPrefetch, loadAudio, playBuffer, prefetchAudio, stopAudio, unlockAudio } from "@/lib/client/audio";
+import { type Voice, cancelPrefetch, loadAudio, playBuffer, prefetchAudio, stopAudio, unlockAudio } from "@/lib/client/audio";
 import { recordingAvailable, startRecording, type Recording } from "@/lib/client/recorder";
 import Avatar, { type Mood } from "./Avatar";
 import Captions from "./Captions";
 import DoubtPanel from "./DoubtPanel";
 import QuizPanel from "./QuizPanel";
 import TopicList from "./TopicList";
+import Icon from "@/components/ui/Icon";
 import Whiteboard, { type BoardEntry } from "./Whiteboard";
 
 type PlayerState = "idle" | "loading" | "speaking" | "listening" | "thinking" | "answering" | "quiz" | "done" | "error";
@@ -65,7 +66,8 @@ export default function LessonPlayer({ lesson: initial }: { lesson: Lesson }) {
     setStateRaw(s);
   };
   const alive = (t: number) => tokenRef.current === t;
-  const language = lesson.language;
+  // Read from the ref so a tutor change applies to the next sentence of a lesson already running.
+  const voice = (): Voice => ({ language: lessonRef.current.language, tutor: lessonRef.current.tutor ?? DEFAULT_TUTOR });
 
   const hold = (ms: number) =>
     new Promise<void>((resolve) => {
@@ -91,13 +93,13 @@ export default function LessonPlayer({ lesson: initial }: { lesson: Lesson }) {
     setCaption(step.say);
     let buffer: AudioBuffer | null = null;
     try {
-      buffer = await loadAudio(step.say, language);
+      buffer = await loadAudio(step.say, voice());
     } catch {
       buffer = null;
     }
     if (!alive(t)) return;
     // Sarvam answers parallel calls slowly, so the current sentence goes first.
-    prefetchAudio(ahead, language, TIMING.maxConcurrentTts);
+    prefetchAudio(ahead, voice(), TIMING.maxConcurrentTts);
     const ms = buffer ? buffer.duration * 1000 : holdFor(step.say);
     const ref = target === "board" ? boardRef : answerRef;
     const next = [...(step.clearBoard ? [] : ref.current), ...makeEntries(step.board, ms)];
@@ -111,7 +113,7 @@ export default function LessonPlayer({ lesson: initial }: { lesson: Lesson }) {
   const speakOnly = async (say: string, t: number) => {
     setCaption(say);
     try {
-      const buffer = await loadAudio(say, language);
+      const buffer = await loadAudio(say, voice());
       if (!alive(t)) return;
       await playBuffer(buffer).ended;
     } catch {
@@ -180,7 +182,7 @@ export default function LessonPlayer({ lesson: initial }: { lesson: Lesson }) {
       const script = await getTopicScript(lessonRef.current, topic);
       if (!alive(t)) return;
       scriptRef.current = script;
-      if (script.steps[0]) await loadAudio(script.steps[0].say, lessonRef.current.language).catch(() => undefined);
+      if (script.steps[0]) await loadAudio(script.steps[0].say, voice()).catch(() => undefined);
       if (!alive(t)) return;
     } catch (e) {
       if (!alive(t)) return;
@@ -216,6 +218,18 @@ export default function LessonPlayer({ lesson: initial }: { lesson: Lesson }) {
     stopAudio();
     cancelHold.current?.();
     void finishTopic(quiz.selected === quiz.quiz.correctIndex, t);
+  };
+
+  const onPickTutor = (tutor: TutorId) => {
+    const updated = { ...lessonRef.current, tutor };
+    lessonRef.current = updated;
+    setLesson(updated);
+    cancelPrefetch();
+    try {
+      saveLesson(updated);
+    } catch {
+      // The choice stays in memory for this session if storage is full.
+    }
   };
 
   // Jumps to any topic, abandoning whatever is playing or being asked.
@@ -412,7 +426,7 @@ export default function LessonPlayer({ lesson: initial }: { lesson: Lesson }) {
     getTopicScript(open, topic)
       .then((s) => {
         const says = s.steps.slice(0, TIMING.prefetchSteps).map((x) => x.say);
-        prefetchAudio(says, open.language, TIMING.maxConcurrentTts);
+        prefetchAudio(says, voice(), TIMING.maxConcurrentTts);
       })
       .catch(() => undefined)
       // Writes the other topics one by one so switching to them is instant.
@@ -454,116 +468,131 @@ export default function LessonPlayer({ lesson: initial }: { lesson: Lesson }) {
   const allDone = lesson.topics.every((x) => x.done);
 
   return (
-    <div data-state={state} className="flex min-h-screen flex-col bg-[#f4efe6] px-4 py-4 text-[#2b2a27] sm:px-6">
-      <header className="mb-3 flex flex-wrap items-center gap-2">
-        <Link href="/" className="mr-1 text-sm text-[#5b574f] underline-offset-2 hover:underline">
-          Home
+    <div data-state={state} className="flex min-h-dvh flex-col gap-4 p-3 pb-24 sm:p-4 sm:pb-24 lg:h-dvh lg:min-h-0 lg:pb-5">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <Link href="/" aria-label="Back to my lessons" className="nb-btn nb-btn-ghost nb-btn-icon">
+          <Icon name="back" />
         </Link>
-        <span className="rounded-full border border-[#d8d0c0] bg-white px-3 py-1 text-sm font-semibold">{lesson.title}</span>
-        <span className="rounded-full border border-[#d8d0c0] bg-white px-3 py-1 text-sm">{LEVELS.find((l) => l.value === lesson.level)?.name ?? lesson.level}</span>
-        <span className="rounded-full border border-[#d8d0c0] bg-white px-3 py-1 text-sm">{langName}</span>
+        <h1 className="min-w-0 flex-1 basis-[calc(100%-60px)] truncate text-lg font-bold tracking-tight sm:basis-0 sm:text-xl" title={lesson.title}>
+          {lesson.title}
+        </h1>
+        <span className="nb-chip">{LEVELS.find((l) => l.value === lesson.level)?.name ?? lesson.level}</span>
+        <span className="nb-chip">{langName}</span>
+        <select
+          data-testid="tutor-select"
+          aria-label="Tutor"
+          value={lesson.tutor ?? DEFAULT_TUTOR}
+          onChange={(e) => onPickTutor(e.target.value as TutorId)}
+          className="nb-field w-28 py-1 text-sm"
+        >
+          {TUTORS.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.name}
+            </option>
+          ))}
+        </select>
       </header>
 
-      <div className="flex flex-1 flex-col gap-4 lg:flex-row">
-        <section className="relative min-h-[320px] flex-1 overflow-hidden rounded-md border-[6px] border-[#8a6a43] bg-[#17322b] shadow-[0_6px_18px_rgba(60,40,10,.25)] lg:h-[calc(100vh-110px)]">
-          <Whiteboard entries={board} />
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_330px] lg:gap-5">
+        <div className="flex min-h-0 flex-col gap-4">
+          <section className="nb-board relative min-h-[46dvh] flex-1 overflow-hidden lg:min-h-0">
+            <Whiteboard entries={board} />
 
-          {answer && (
-            <div className="absolute inset-3 z-10 flex flex-col overflow-hidden rounded-xl border-2 border-[#f6d97a] bg-[#faf7f0] shadow-2xl">
-              <div className="border-b border-[#e3d9c2] bg-[#f6efd9] px-4 py-2 text-sm text-[#5b574f]">
-                <span className="font-semibold text-[#8a6a43]">Your doubt: </span>
-                {answer.question}
+            {answer && (
+              <div className="glass-dark absolute inset-3 z-10 flex flex-col overflow-hidden">
+                <div className="border-b-2 border-chalk px-4 py-2 text-sm">
+                  <span className="font-bold text-chalk-accent">Your doubt: </span>
+                  {answer.question}
+                </div>
+                <div className="min-h-0 flex-1">
+                  <Whiteboard entries={answer.entries} variant="answer" />
+                </div>
               </div>
-              <div className="min-h-0 flex-1 bg-[#1f3d34]">
-                <Whiteboard entries={answer.entries} variant="answer" />
+            )}
+
+            {quiz && <QuizPanel quiz={quiz.quiz} selected={quiz.selected} onPick={(i) => void pickQuiz(i)} onNext={onQuizNext} />}
+
+            {state === "idle" && (
+              <div className="absolute inset-0 z-10 board-scrim flex items-center justify-center p-5">
+                <div className="glass flex max-w-sm flex-col items-center gap-4 p-6 text-center">
+                  <p className="text-xl font-bold tracking-tight text-balance">
+                    {anyDone && !allDone ? "Welcome back. Pick up where you left off." : "Your tutor is ready."}
+                  </p>
+                  <button type="button" data-testid="start-button" onClick={onStart} className="nb-btn nb-btn-primary w-full">
+                    {anyDone && !allDone ? "Continue lesson" : allDone ? "Start again" : "Start lesson"} <Icon name="arrow" />
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {quiz && <QuizPanel quiz={quiz.quiz} selected={quiz.selected} onPick={(i) => void pickQuiz(i)} onNext={onQuizNext} />}
+            {state === "loading" && (
+              <div className="absolute inset-0 z-10 board-scrim flex items-center justify-center p-5" role="status">
+                <div className="glass flex items-center gap-3 px-5 py-3 font-bold">
+                  <span className="nb-pulse size-3 rounded-sm bg-ink" aria-hidden="true" />
+                  Getting this topic ready
+                </div>
+              </div>
+            )}
 
-          {state === "idle" && (
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#17322b]/90 p-6 text-center">
-              <p className="text-lg text-[#f2efe4]" style={{ fontFamily: "var(--font-board), cursive" }}>
-                {anyDone && !allDone ? "Welcome back. Pick up where you left off." : "Your tutor is ready to begin."}
-              </p>
-              <button
-                type="button"
-                data-testid="start-button"
-                onClick={onStart}
-                className="rounded-full bg-[#c8452f] px-8 py-3 text-lg font-semibold text-white shadow-lg transition hover:bg-[#b23c28]"
-              >
-                {anyDone && !allDone ? "Continue lesson" : allDone ? "Start again" : "Start lesson"}
-              </button>
-            </div>
-          )}
+            {state === "done" && (
+              <div className="absolute inset-0 z-10 board-scrim flex items-center justify-center p-5">
+                <div className="glass flex max-w-sm flex-col items-center gap-3 p-6 text-center">
+                  <p className="text-2xl font-bold tracking-tight">Lesson complete</p>
+                  <p className="text-muted">You finished all {lesson.topics.length} topics.</p>
+                  <Link href="/" className="nb-btn nb-btn-primary w-full">
+                    Back to my lessons
+                  </Link>
+                </div>
+              </div>
+            )}
 
-          {state === "loading" && (
-            <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#17322b]/70 text-[#f2efe4]" role="status">
-              <span className="animate-pulse text-lg">Getting this topic ready...</span>
-            </div>
-          )}
+            {state === "error" && (
+              <div className="absolute inset-0 z-10 board-scrim flex items-center justify-center p-5" role="alert">
+                <div className="glass flex max-w-md flex-col items-center gap-4 p-6 text-center">
+                  <p className="font-medium">{errorText}</p>
+                  <button type="button" onClick={() => void beginTopic(cursor.current.topic)} className="nb-btn nb-btn-primary w-full">
+                    Try again
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
 
-          {state === "done" && (
-            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#17322b]/90 p-6 text-center text-[#f2efe4]">
-              <p className="text-2xl font-bold text-[#f6d97a]">Lesson complete</p>
-              <p>You finished all {lesson.topics.length} topics.</p>
-              <Link href="/" className="rounded-full bg-[#c8452f] px-6 py-2.5 font-semibold text-white">
-                Back to my lessons
-              </Link>
-            </div>
-          )}
+          <Captions text={caption} options={LANGUAGES.map((l) => ({ code: l.code, name: l.name }))} lessonLanguage={lesson.language} />
+        </div>
 
-          {state === "error" && (
-            <div
-              className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-[#17322b]/90 p-6 text-center text-[#f2efe4]"
-              role="alert"
-            >
-              <p className="max-w-md">{errorText}</p>
-              <button
-                type="button"
-                onClick={() => void beginTopic(cursor.current.topic)}
-                className="rounded-full bg-[#c8452f] px-6 py-2.5 font-semibold text-white"
-              >
-                Try again
-              </button>
-            </div>
-          )}
-        </section>
-
-        <aside className="flex w-full flex-col gap-3 lg:w-[300px] lg:shrink-0">
-          <div className="aspect-square w-full max-w-[300px] self-center overflow-hidden rounded-xl border border-[#cfc4af] bg-[#e8dfcf] lg:max-w-none">
-            <Avatar speaking={speaking} mood={mood} />
+        <aside className="contents lg:flex lg:min-h-0 lg:flex-col lg:gap-4">
+          {/* On small screens the tutor sits above the board instead of below the fold. */}
+          <div className="nb-card order-first h-40 shrink-0 overflow-hidden bg-accent lg:order-none lg:h-[clamp(170px,30dvh,290px)]">
+            <Avatar speaking={speaking} mood={mood} tutor={lesson.tutor ?? DEFAULT_TUTOR} />
           </div>
-          <Captions
-            text={caption}
-            options={LANGUAGES.map((l) => ({ code: l.code, name: l.name }))}
-            lessonLanguage={lesson.language}
-          />
           <TopicList topics={lesson.topics} current={topicIdx} started={started} onPick={onPickTopic} />
-          {doubtOpen ? (
-            <DoubtPanel
-              phase={state === "thinking" ? "thinking" : "listening"}
-              mic={mic}
-              text={text}
-              notice={notice}
-              canRetry={canRetry}
-              onText={setText}
-              onSend={() => void onSend()}
-              onCancel={onCancelDoubt}
-              onRetry={() => void askDoubt(questionRef.current, tokenRef.current)}
-            />
-          ) : (
-            <button
-              type="button"
-              data-testid="ask-button"
-              disabled={state !== "speaking" && state !== "answering"}
-              onClick={onAsk}
-              className="rounded-full bg-[#c8452f] px-5 py-3 text-base font-semibold text-white shadow transition hover:bg-[#b23c28] disabled:bg-[#d8d0c0] disabled:text-[#8a7f6a] disabled:shadow-none"
-            >
-              Ask a doubt
-            </button>
-          )}
+          {/* Fixed on small screens so a doubt is always one tap away. */}
+          <div className="fixed inset-x-3 bottom-3 z-30 shrink-0 sm:inset-x-4 lg:static">
+            {doubtOpen ? (
+              <DoubtPanel
+                phase={state === "thinking" ? "thinking" : "listening"}
+                mic={mic}
+                text={text}
+                notice={notice}
+                canRetry={canRetry}
+                onText={setText}
+                onSend={() => void onSend()}
+                onCancel={onCancelDoubt}
+                onRetry={() => void askDoubt(questionRef.current, tokenRef.current)}
+              />
+            ) : (
+              <button
+                type="button"
+                data-testid="ask-button"
+                disabled={state !== "speaking" && state !== "answering"}
+                onClick={onAsk}
+                className="nb-btn nb-btn-accent w-full text-lg"
+              >
+                <Icon name="mic" /> Ask a doubt
+              </button>
+            )}
+          </div>
         </aside>
       </div>
     </div>

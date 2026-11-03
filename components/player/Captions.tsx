@@ -49,26 +49,23 @@ export default function Captions({
   const shown = target !== "off" && target !== lessonLanguage ? (fresh ?? text) : text;
 
   return (
-    <div className="rounded-xl border border-[#d8d0c0] bg-white px-3 py-2.5">
-      <div className="mb-1 flex items-center justify-between gap-2 text-[11px] font-semibold uppercase tracking-wide text-[#8a7f6a]">
-        <span>Caption</span>
-        <select
-          aria-label="Caption language"
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
-          className="rounded-md border border-[#d8d0c0] bg-[#faf7f0] px-1.5 py-0.5 text-[11px] normal-case tracking-normal text-[#2b2a27]"
-        >
-          <option value="off">Same language</option>
-          {options.map((o) => (
-            <option key={o.code} value={o.code}>
-              {o.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      <p data-testid="caption" className="min-h-[3.2em] text-[15px] leading-snug text-[#2b2a27]" lang={target === "off" ? lessonLanguage : target}>
+    <div className="nb-card flex shrink-0 flex-col gap-2 px-4 py-3 sm:flex-row sm:items-start sm:gap-4">
+      <p data-testid="caption" aria-live="off" className="min-h-[3em] flex-1 text-[17px] leading-normal" lang={target === "off" ? lessonLanguage : target}>
         {shown}
       </p>
+      <select
+        aria-label="Caption language"
+        value={target}
+        onChange={(e) => setTarget(e.target.value)}
+        className="nb-field shrink-0 text-sm sm:w-40"
+      >
+        <option value="off">Same language</option>
+        {options.map((o) => (
+          <option key={o.code} value={o.code}>
+            {o.name}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
