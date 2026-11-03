@@ -13,6 +13,9 @@ export function hasApiKey(): boolean {
 const isTimeout = (e: unknown) => ["TimeoutError", "AbortError"].includes((e as { name?: string }).name ?? "");
 const tooSlow = () => new SarvamError(SARVAM_TIMEOUT, "Sarvam took too long to answer. Please try again.");
 
+// Gives a timeout the clear message and status every route returns.
+export const namedTimeout = (e: unknown) => (isTimeout(e) ? tooSlow() : e);
+
 // Error bodies come as {error:{message}}, {detail} or {message} depending on the API.
 function errorText(body: unknown, fallback: string): string {
   if (body && typeof body === "object") {
@@ -50,7 +53,7 @@ export async function sarvamJson<T>(path: string, init: RequestInit = {}): Promi
   try {
     return (await (await sarvamFetch(path, init)).json()) as T;
   } catch (e) {
-    throw isTimeout(e) ? tooSlow() : e;
+    throw namedTimeout(e);
   }
 }
 

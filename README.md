@@ -113,9 +113,9 @@ A student can click any topic to jump straight to it.
 
 ## Principles
 
-- **The lesson never freezes.** If speech fails or sound is blocked, captions carry the lesson forward. A call to Sarvam that gets stuck is given up on and tried again rather than waited on.
+- **The lesson never freezes.** If speech fails or sound is blocked, captions carry the lesson forward. A call to Sarvam that gets stuck is given up on rather than waited on, and writing and answering calls are tried again.
 - **The student stays in charge.** They can interrupt, skip an explanation or switch topic at any time.
-- **Teach in the chosen language.** Replies are checked, and asked for again when they drift into the textbook's language.
+- **Teach in the chosen language.** Replies in non-English lessons are checked for the right script, and asked for again when they drift into another one.
 - **Stay on the book.** Answers come from the uploaded text first, and the tutor says so when the book does not cover a question.
 - **The secret key stays on the server.** It never reaches the browser.
 - **The textbook is material, not instructions.** Text inside a PDF is never treated as a command.

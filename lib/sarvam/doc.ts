@@ -3,7 +3,7 @@ import JSZip from "jszip";
 import { TIMING } from "@/lib/config";
 import type { LanguageCode } from "@/lib/types";
 import { SarvamError } from "./errors";
-import { sarvamFetch, sarvamJson } from "./http";
+import { namedTimeout, sarvamJson } from "./http";
 
 type StatusResponse = { status: string; usage?: { pages_processed?: number; pages_total?: number } };
 type DownloadResponse = { method: string; url: string; headers?: Record<string, string> };
@@ -24,9 +24,15 @@ export async function startDigitise(file: Blob, filename: string, language: Lang
 // The output ZIP holds the markdown beside per-page metadata and a manifest.
 async function readMarkdown(jobId: string): Promise<string> {
   const dl = await sarvamJson<DownloadResponse>(`/doc-ai/v1/job/${encodeURIComponent(jobId)}/download-url`);
-  const res = await fetch(dl.url, { method: dl.method, headers: dl.headers, signal: AbortSignal.timeout(TIMING.sarvamCallMs) });
-  if (!res.ok) throw new SarvamError(502, "Could not download the read result from Sarvam.");
-  const zip = await JSZip.loadAsync(await res.arrayBuffer());
+  const bytes = await fetch(dl.url, { method: dl.method, headers: dl.headers, signal: AbortSignal.timeout(TIMING.sarvamCallMs) })
+    .then((res) => {
+      if (!res.ok) throw new SarvamError(502, "Could not download the read result from Sarvam.");
+      return res.arrayBuffer();
+    })
+    .catch((e) => {
+      throw namedTimeout(e);
+    });
+  const zip = await JSZip.loadAsync(bytes);
   const entry = Object.values(zip.files).find((f) => !f.dir && f.name.toLowerCase().endsWith(".md"));
   if (!entry) throw new SarvamError(502, "Sarvam returned no text for this PDF.");
   return entry.async("string");
@@ -39,9 +45,7 @@ export async function getDigitiseResult(jobId: string): Promise<{
   markdown?: string;
   error?: string;
 }> {
-  const s = await sarvamFetch(`/doc-ai/v1/job/${encodeURIComponent(jobId)}/status`).then(
-    (r) => r.json() as Promise<StatusResponse>,
-  );
+  const s = await sarvamJson<StatusResponse>(`/doc-ai/v1/job/${encodeURIComponent(jobId)}/status`);
   const pagesProcessed = s.usage?.pages_processed ?? 0;
   const pagesTotal = s.usage?.pages_total ?? 0;
   if (s.status === "completed" || s.status === "partially_completed") {

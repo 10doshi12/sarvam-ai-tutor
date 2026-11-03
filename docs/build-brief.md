@@ -12,7 +12,7 @@ It deploys to Vercel and also runs locally. Single user per browser, no login, n
 
 Vercel functions have a read-only filesystem, no lasting state between requests, and a 4.5 MB limit on request and response bodies. So:
 
-- **Sarvam calls have a time limit.** A stuck call fails with a clear message instead of hanging for minutes, and chat calls are tried again within the route limit.
+- **Sarvam calls have a time limit.** A stuck call fails with a clear message instead of hanging for minutes, and chat calls are tried again up to a total that fits inside the route limit.
 - **The server is stateless.** Routes only forward to Sarvam using the secret key. No disk writes, no in-memory caches or job maps, no background work after a response.
 - **The browser owns everything else.** It runs the preparation steps in order, keeps lessons in `localStorage` and keeps slow Sarvam results in IndexedDB.
 - **PDFs go through our server and are capped at 4 MB.** Sarvam's upload storage refuses direct browser uploads (its CORS rules return 403), so the 4.5 MB function limit applies.
@@ -50,7 +50,7 @@ Next.js 16 App Router, React 19, TypeScript, Tailwind 4, bun. Route handlers rec
 
 All calls use the header `api-subscription-key`, read from env var `SARVAM_API_KEY`.
 
-**Chat details that matter.** Send `reasoning_effort: null` on every chat call: reasoning tokens count against `max_tokens`, and when it runs out `content` comes back empty. The Starter plan caps `max_tokens` at 4096, so stay within that. Use `response_format` type `json_schema` for structured output and parse `message.content`. Keep schemas flat. Strip code fences if present, validate by hand, retry once with the error appended, then fail visibly. `sarvam-30b` and `sarvam-m` are rejected by the API.
+**Chat details that matter.** Send `reasoning_effort: null` on every chat call: reasoning tokens count against `max_tokens`, and when it runs out `content` comes back empty. The Starter plan caps `max_tokens` at 4096, so stay within that. Use `response_format` type `json_schema` for structured output and parse `message.content`. Keep schemas flat. Strip code fences if present, validate by hand, and retry up to the limit in config with the problem appended. Keep the last usable reply if tries run out, otherwise fail visibly. `sarvam-30b` and `sarvam-m` are rejected by the API.
 
 **Languages.** Lessons offer only what Bulbul v4 Flash voices: Hindi `hi-IN`, English `en-IN`, Bengali `bn-IN`, Gujarati `gu-IN`, Kannada `kn-IN`, Marathi `mr-IN`, Punjabi `pa-IN`, Tamil `ta-IN`, Telugu `te-IN`. Malayalam and Odia are left out because v4 Flash has no voices for them. A student may still ask a doubt in any language Saaras hears. Indic narration must be in native script, because romanised input degrades speech quality.
 
@@ -60,9 +60,9 @@ All calls use the header `api-subscription-key`, read from env var `SARVAM_API_K
 
 - `LanguageCode`: the nine codes above.
 - `Level`: `school`, `college`, `expert`.
-- `LessonStatus`: `reading`, `planning`, `ready`, `failed`.
+- `LessonStatus`: `reading`, `planning`, `writing`, `voicing`, `ready`, `failed`.
 - `Topic`: `id`, `title`, `summary`, `done` (boolean), `quizCorrect` (boolean or null).
-- `Lesson`: `id`, `title`, `filename`, `level`, `language`, `tutor` (optional, one of `TutorId`: `arjun`, `rohan`, `meera`, `anaya`), `status`, `error` (optional), `createdAt`, `topics`.
+- `Lesson`: `id`, `title`, `filename`, `level`, `language`, `tutor` (optional, one of `TutorId`: `arjun`, `rohan`, `meera`, `anaya`), `status`, `progress` (optional, `done` and `total` for the current phase), `error` (optional), `createdAt`, `topics`.
 - `BoardItem`: a flat object with `kind` (`heading`, `text`, `bullet`, `equation`, `diagram`), `text` (optional), `latex` (optional), `nodes` (optional, each `id`, `label`), `edges` (optional, each `from`, `to`, `label` optional).
 - `Step`: `say` (one or two short sentences), `clearBoard` (boolean), `board` (BoardItem array, written while `say` plays).
 - `Quiz`: `question`, `options` (strings), `correctIndex`, `explanation`.
@@ -111,7 +111,7 @@ Errors are JSON `{ error: string }` with a sensible status. A missing key return
 
 ## Browser storage and preparation
 
-`lib/client/storage.ts` wraps `localStorage` in try/catch and is only touched after mount, so server and client render the same first paint. Keys: an index of `Lesson` objects, one source text per lesson, one `TopicScript` per lesson and topic. When a write hits the quota, show a message offering to delete old lessons, and never crash. A delete action removes a lesson and everything under it.
+`lib/client/storage.ts` wraps `localStorage` in try/catch and is only touched after mount, so server and client render the same first paint. Keys: an index of `Lesson` objects, one source text per lesson, one `TopicScript` per lesson and topic. When a write hits the quota, show a message offering to delete old lessons, and never crash. A delete action removes a lesson and everything under it in `localStorage`.
 
 `lib/client/prepare.ts` runs preparation, saving status at each step so the screen can show it:
 
@@ -123,7 +123,7 @@ Errors are JSON `{ error: string }` with a sensible status. A missing key return
 
 Steps 4 and 5 are best effort. A script or clip that fails does not fail the lesson, because the player fetches anything missing when it is needed. Waiting here is deliberate: it lets the lesson play and switch topics without pauses.
 
-`lib/client/cache.ts` keeps results in IndexedDB under a SHA-256 hash of what produced them, so the same input never pays twice, even in a new lesson: extracted text (PDF bytes and language), plan (text, level, language, file names), script (text, level, language, topic, topic titles), speech (tutor, language, sentence) and translated captions. Doubt answers are not cached. Plans, scripts and doubt answers are checked on the server: when most of the prose is not in the lesson language's script, the model is asked again with the problem appended, a limited number of times, and the last usable reply is kept rather than failing the lesson. The instruction is also repeated after the textbook, because a long book in another language can pull the reply into it. A share threshold in config leaves room for code and technical terms in English. Any cache failure counts as a miss. Cache Storage is not used because WebKit under Playwright lost its entries on navigation. Preparation ends by removing the oldest entries over the cap. Bump the version in config when prompts or voices change, which empties the cache. Deleting a lesson leaves its cached results, because other lessons can share them.
+`lib/client/cache.ts` keeps results in IndexedDB under a SHA-256 hash of what produced them, so the same input never pays twice, even in a new lesson: extracted text (PDF bytes and language), plan (text, level, language, file names), script (text, level, language, topic, topic titles), speech (tutor, language, sentence) and translated captions. Doubt answers are not cached. Plans, scripts and doubt answers in non-English lessons are checked on the server. The check looks only at script, so Hindi would pass for Marathi. When too little of the prose is in the lesson language's script, the model is asked again with the problem appended, a limited number of times, and the last usable reply is kept rather than failing the lesson. The instruction is also repeated after the textbook, because a long book in another language can pull the reply into it. A share threshold in config leaves room for code and technical terms in English. Any cache failure counts as a miss. Cache Storage is not used because WebKit under Playwright lost its entries on navigation. Preparation ends by removing the oldest entries over the cap. Bump the version in config when prompts or voices change, which empties the cache. Deleting a lesson leaves its cached results, because other lessons can share them.
 
 Nothing resumes if the tab closes mid-preparation, because the PDF is not kept, so the screen warns before leaving. A lesson found still preparing on load is marked failed, asking for a new upload, and the cache makes that upload much faster.
 
@@ -161,7 +161,7 @@ States, exposed as `data-state` on the player root: `idle`, `loading`, `speaking
 - **Failures never stall the lesson.** If one step's audio fails, show the caption and hold for a time based on its length, then continue. If a script or doubt request fails, show the message with a retry.
 - **Reopening.** Opening a saved lesson resumes at the first topic not done.
 
-Add `data-testid` on: upload form fields, start button, ask button, doubt text box and send, quiz options, caption, topic list items, tutor select, and the board.
+Add `data-testid` on: upload form fields, start button, ask button, doubt text box and send, quiz options, caption, topic list items, tutor select, the board, the preparation phases, and the preparing status and error text.
 
 ## Out of the MVP
 

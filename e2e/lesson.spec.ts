@@ -256,7 +256,9 @@ test("uploading the same PDF again reuses everything, and the phases are shown t
 
   await uploadPdf(page, "volcanoes.pdf", pdf);
   await expect(page.getByTestId("prep-reading")).toHaveAttribute("data-state", "current");
-  for (const phase of ["planning", "writing", "voicing"]) {
+  // Planning can finish between two screen updates, so it may go straight to done.
+  await expect(page.getByTestId("prep-planning")).toHaveAttribute("data-state", /current|done/, { timeout: READY_TIMEOUT });
+  for (const phase of ["writing", "voicing"]) {
     await expect(page.getByTestId(`prep-${phase}`)).toHaveAttribute("data-state", "current", { timeout: READY_TIMEOUT });
   }
   await expect(page.getByTestId("topic-item").first()).toBeVisible({ timeout: READY_TIMEOUT });
