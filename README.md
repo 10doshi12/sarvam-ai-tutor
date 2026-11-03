@@ -1,22 +1,31 @@
 # AI Avatar Tutor
 
-An illustrated avatar teaches you a textbook chapter out loud, writing notes on a whiteboard as it talks. You can interrupt at any moment with a doubt, spoken or typed. The avatar stops, answers from your book, then carries on from the sentence it was on.
+Upload a textbook chapter and an animated tutor teaches it to you out loud, writing notes on a whiteboard as it talks. Interrupt at any moment with a doubt, spoken or typed. The tutor stops, answers from your book, then picks up from the sentence it was on.
 
 ## Who it is for
 
-Students who want a patient tutor for a short chapter, in their own language and at their own level (school, college or expert). It is also a working example of an AI product built on Sarvam's models for reading documents, speech and chat.
+- **Students** who want a patient tutor for a short chapter, in their own language and at their own level.
+- **Builders** looking for a working example of an AI product built on Sarvam's models for reading documents, speech, translation and chat.
 
 ## Run it
 
-Prerequisites: bun and a Sarvam API key.
+**Prerequisites:** Bun, Node.js and a Sarvam API key.
 
-Install the packages:
+Get the code and install the packages:
+
+```bash
+git clone https://github.com/10doshi12/sarvam-ai-tutor.git
+```
+
+```bash
+cd sarvam-ai-tutor
+```
 
 ```bash
 bun install
 ```
 
-Add your key. Copy the example settings file, then put the key in it as `SARVAM_API_KEY`:
+Create your settings file, then put your key in it as `SARVAM_API_KEY`:
 
 ```bash
 cp .env.example .env
@@ -28,60 +37,101 @@ Start the app, then open http://localhost:3000:
 bun run dev
 ```
 
-Run the browser test. It uses WebKit and calls the real Sarvam services, so it needs the key, takes several minutes and uses a little of your quota. The first time, install the browser it drives:
+### Run the tests
+
+The browser tests drive WebKit and call the real Sarvam services, so they need your key and use some of your quota. Install the browser once:
 
 ```bash
 bunx playwright install webkit
+```
+
+```bash
 bun run test:e2e
 ```
 
-The test cannot cover the microphone, because WebKit under Playwright has no fake one. Typed doubts and the speech services themselves are covered.
+### Deploy to Vercel
 
-## Deploy to Vercel
-
-1. Import the repository as a new project on Vercel.
+1. Import this repository as a new project on Vercel.
 2. In the project settings, add the environment variable `SARVAM_API_KEY`.
 3. Turn on Vercel Authentication for the deployment.
 
-Step 3 matters because the app has no login. Anyone who knows the URL could use it, and every lesson they start is paid for with your key.
+Step 3 matters because the app has no login of its own. Without it, anyone with the link could start lessons paid for with your key.
+
+## How a lesson works
+
+```mermaid
+flowchart TD
+    A["Student chooses PDFs,<br/>level and language"] --> B["Sarvam reads the PDFs"]
+    B --> C["Text is split into short topics"]
+    C --> D["Tutor teaches a topic aloud<br/>and writes on the whiteboard"]
+    D --> E{"Student has a doubt?"}
+    E -- "Yes" --> F["Tutor stops and answers<br/>from the book"]
+    F --> D
+    E -- "No" --> G["One quick question<br/>with instant feedback"]
+    G --> H{"More topics?"}
+    H -- "Yes" --> D
+    H -- "No" --> I["Lesson complete"]
+
+    classDef student fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e
+    classDef ai fill:#dcfce7,stroke:#15803d,color:#14532d
+    classDef choice fill:#fef3c7,stroke:#b45309,color:#78350f
+    classDef finish fill:#ede9fe,stroke:#6d28d9,color:#3b0764
+
+    class A,G student
+    class B,C,D,F ai
+    class E,H choice
+    class I finish
+```
+
+A student can click any topic to jump straight to it.
 
 ## Goals
 
-- Turn one or several textbook PDFs, each up to 10 pages, into one lesson of short topics, each taught aloud beside a whiteboard.
-- Let the student interrupt by voice or typing, get an answer from the book, and pick up where the lesson stopped.
-- End each topic with one quick question and instant feedback, and tick off finished topics.
-- Teach in nine languages (Hindi, English, Bengali, Gujarati, Kannada, Marathi, Punjabi, Tamil, Telugu) at three levels.
-- Run on a laptop and on Vercel with no database.
+- Turn one or several textbook PDFs into a single lesson of short topics.
+- Teach each topic aloud beside a whiteboard, with an avatar that reacts to the moment: listening, thinking, asking, pleased or concerned.
+- Let the student interrupt by voice or typing, get an answer, and carry on from the same sentence.
+- Check understanding with one quick question per topic, and tick off finished topics.
+- Teach in nine languages (English, Hindi, Bengali, Gujarati, Kannada, Marathi, Punjabi, Tamil, Telugu) at three levels (school, college, expert).
+- Run on a laptop or on Vercel with no database.
 
 ## Non-goals
 
 | Not doing | Why |
 |---|---|
-| Single PDFs over 10 pages | The document reader has a per-job page limit. Split a longer book into several PDFs. |
-| Keeping the original PDF | It is often too big for the browser's storage, and nothing needs it once the text is read. |
-| Lessons across devices or browsers | There is no database. Lessons live in the browser that made them. |
-| Hands-free interruption | The microphone would hear the avatar. A button works reliably, even with speakers. |
-| Streaming speech | One request per sentence is simpler and keeps voice and board in step. |
-| Word-by-word board sync | The voice service gives no word timings, so the board follows each sentence. |
-| Adjusting difficulty from quiz answers | Kept small for now. |
-| Malayalam and Odia lessons | The voice model has no voices for them. A doubt can still be asked in them. |
-| Login or rate limiting | Not built. Use Vercel Authentication on any public deployment. |
+| Single PDFs over 10 pages | Sarvam's document reader has a per-job page limit. Split a longer book into several PDFs. |
+| Very large PDF files | Uploads pass through the server because Sarvam's upload storage refuses direct browser uploads, and Vercel limits request size. The upload form enforces the limit and explains it. |
+| A photorealistic avatar | The avatar is drawn and animated in the browser from the tutor's audio, so it needs no video service. |
+| Lessons across devices or browsers | There is no database. Lessons stay in the browser that made them. |
+| Keeping the original PDF | Often too big for browser storage, and nothing needs it once the text is read. |
+| Hands-free interruption | The microphone would hear the tutor. A button works reliably, even on speakers. |
+| Word-by-word board writing | The voice service gives no word timings, so the board follows each sentence. |
+| Changing difficulty from quiz answers | Kept out to keep the first version small. |
+| Malayalam and Odia lessons | The voice model has no voices for them yet. A doubt can still be asked in these languages. |
+| Login or rate limiting | Not built. Use Vercel Authentication on any deployment. |
+| Voice cloning and beta chat models | Both are in beta and add nothing to this flow. |
+
+## Principles
+
+- **The lesson never freezes.** If speech fails or sound is blocked, captions carry the lesson forward.
+- **The student stays in charge.** They can interrupt, skip an explanation or switch topic at any time.
+- **Stay on the book.** Answers come from the uploaded text first, and the tutor says so when the book does not cover a question.
+- **The secret key stays on the server.** It never reaches the browser.
+- **The textbook is material, not instructions.** Text inside a PDF is never treated as a command.
 
 ## How it fits together
 
-The browser does the preparation and keeps your lessons. The server only passes requests on to Sarvam and holds the secret key. Your PDF goes straight from the browser to Sarvam's document reader, so large files are not squeezed through the server.
+The browser runs the lesson and keeps it in local storage. The server holds no data: it only passes requests to Sarvam using the secret key, which is what lets it run on Vercel.
 
 ```mermaid
 flowchart LR
-    B["Browser<br/>screens, avatar, lessons in local storage"]
-    S["Server<br/>stateless, holds the API key"]
-    R["Sarvam document reader"]
-    C["Sarvam chat<br/>plans topics, writes scripts, answers doubts"]
-    V["Sarvam voice<br/>speaks and listens"]
-    T["Sarvam translation<br/>and language detection"]
+    B["Browser<br/>screens, avatar, saved lessons"]
+    S["Server<br/>holds the API key, stores nothing"]
+    R["Sarvam Vision<br/>reads PDFs"]
+    C["Sarvam-105B<br/>plans, teaches, answers"]
+    V["Bulbul and Saaras<br/>speak and listen"]
+    T["Mayura and Sarvam Translate<br/>captions and doubts"]
 
-    B -- "PDF upload" --> R
-    B -- "requests" --> S
+    B --> S
     S --> R
     S --> C
     S --> V
@@ -96,11 +146,55 @@ flowchart LR
     class R,C,V,T sarvam
 ```
 
+## Modules in plain words
+
+| Module | What it does |
+|---|---|
+| Upload and preparation | Checks the PDFs in the browser, has Sarvam read them, and joins them into one lesson. If there is too much text, each document gets a fair share. |
+| Lesson writer | Plans the topics and writes what the tutor says and writes for each one, matched to the level and language. |
+| Player | Runs the lesson: speech, topic switching, interruptions, quizzes and progress. |
+| Avatar | A shaded, lightly 3D character whose mouth follows the audio. It blinks, nods, gestures, follows the pointer and changes expression with the moment. |
+| Whiteboard | Writes notes, equations and simple diagrams in time with each sentence. Answers to doubts appear on a separate overlay so the lesson notes survive. |
+| Doubts | Hears or reads the question, translates it if it is in another language, and answers from the book. |
+| Sarvam connection | The server's only outside link, and the only place that uses the secret key. |
+| Browser storage | Saves lessons, extracted text and progress on the student's device. |
+
+## How we know it works
+
+| Scenario | Expected outcome | Why it matters |
+|---|---|---|
+| Upload a PDF, start, interrupt with a typed doubt | The tutor answers, then repeats the interrupted sentence | This is the core promise of the product |
+| Reload during a lesson | The lesson and progress are still there | There is no database to fall back on |
+| Upload several PDFs | One lesson is built from all of them | Students can combine chapters |
+| One long PDF next to a short one | The short one still reaches the tutor | A long document must not silently hide another |
+| Upload a PDF over 10 pages, or too many PDFs | Refused with a clear message before anything is sent | Saves waiting and quota |
+| Speak a sentence, then transcribe it | The words come back | Proves the voice services work end to end |
+| Answer a quiz when audio never finishes | The lesson still moves on | The lesson must never freeze |
+| Click another topic | The tutor switches straight away | The student stays in charge |
+
+The automated tests cannot use a microphone, because WebKit under Playwright has no fake one. Check spoken doubts by hand after changing that path.
+
 ## Limits
 
-- Each PDF holds at most 10 pages, and a lesson takes a limited number of PDFs.
-- When several PDFs are very long, each is trimmed fairly so the lesson stays within what the model can read at once.
-- One person per browser. Clearing the site's data deletes the lessons.
-- A spoken doubt must be short; longer recordings are cut off.
-- Quality depends on the PDF: scanned pages with poor print may be read badly.
-- Non-Latin handwriting on the whiteboard falls back to the system font for scripts other than Latin and Devanagari.
+- Lessons stay in one browser. Clearing the site's data deletes them.
+- Spoken doubts must be short. Longer recordings stop automatically.
+- Quality depends on the PDF. Poorly printed scans may be read badly.
+- Whiteboard handwriting covers Latin and Devanagari. Other scripts use the system font.
+- If one PDF cannot be read, the lesson fails with a message naming that file.
+
+## Phases
+
+| Phase | Status |
+|---|---|
+| Working lesson flow: upload, teach, interrupt, quiz | Done |
+| Several PDFs per lesson, topic switching, expressive avatar | Done |
+| First deployment on Vercel | Next |
+
+## Open questions
+
+| Question | Owner |
+|---|---|
+| Should a public version have its own login and usage limits? | Dashank |
+| Is it worth lifting the upload size limit by sending files to Sarvam's storage in pieces through the server? | Dashank |
+| Which voice suits each language best? Each has one voice chosen so far. | Dashank |
+| Should lessons sync across devices, which would need a database? | Dashank |
